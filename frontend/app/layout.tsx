@@ -35,8 +35,6 @@ export const metadata: Metadata = {
     images: [
       {
         url: "/main-menu-bg.jpg",
-        width: 1200,
-        height: 630,
         alt: "AthleteMind biomechanics training interface",
       },
     ],
