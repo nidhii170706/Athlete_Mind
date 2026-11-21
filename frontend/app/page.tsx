@@ -4733,7 +4733,7 @@ export default function AthleteMindPage() {
   if (!hasMounted) {
     // Render a clean loading or menu shell during initial server SSR
     return (
-      <div className="min-h-screen bg-slate-950 text-cyan-400 flex items-center justify-center font-mono">
+      <main id="main-content" className="min-h-screen bg-slate-950 text-cyan-400 flex items-center justify-center font-mono">
         INITIALIZING SYSTEM...
       </div>
     );
@@ -4974,7 +4974,7 @@ export default function AthleteMindPage() {
       {/* ------------------------------------------------------------------- */}
       {/* 2. MAIN ARENA VIEWPORT (FUTURISTIC COCKPIT FRAME & ROCKET BLUEPRINT) */}
       {/* ------------------------------------------------------------------- */}
-      <main className="relative flex-1 w-full h-[calc(100vh-3.5rem)] flex items-center justify-center p-0 bg-[#050811] overflow-hidden">
+      <div className="relative flex-1 w-full h-[calc(100vh-3.5rem)] flex items-center justify-center p-0 bg-[#050811] overflow-hidden">
         <FuturisticCockpitFrame
           currentAngle={primaryAngle}
           targetAngle={
@@ -5699,7 +5699,7 @@ export default function AthleteMindPage() {
             </div>
           )}
         </FuturisticCockpitFrame>
-      </main>
+      </div>
       </>
       )}
 
