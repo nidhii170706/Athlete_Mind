@@ -4735,7 +4735,7 @@ export default function AthleteMindPage() {
     return (
       <main id="main-content" className="min-h-screen bg-slate-950 text-cyan-400 flex items-center justify-center font-mono">
         INITIALIZING SYSTEM...
-      </div>
+      </main>
     );
   }
 
