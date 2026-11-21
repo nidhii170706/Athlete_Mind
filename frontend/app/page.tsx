@@ -4740,7 +4740,7 @@ export default function AthleteMindPage() {
   }
 
   return (
-    <div className="relative w-screen h-screen bg-[#050811] text-white flex flex-col font-mono select-none overflow-hidden">
+    <main id="main-content" className="relative w-screen h-screen bg-[#050811] text-white flex flex-col font-mono select-none overflow-hidden">
       <Script
         src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"
         strategy="afterInteractive"
@@ -6729,6 +6729,6 @@ export default function AthleteMindPage() {
         onSelectExercise={(newEx) => handleSelectExercise(newEx as ExerciseType)}
         onClose={() => setShowExerciseSelector(false)}
       />
-    </div>
+    </main>
   );
 }
