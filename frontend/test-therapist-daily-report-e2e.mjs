@@ -201,30 +201,110 @@ test("Session Report Details: Preserves historical prescription version and sepa
   assert.equal(nov24Session.patientNote, "The last hold felt difficult.");
 });
 
-test("Access Control: Verified clinician vs unverified clinician access rules", () => {
-  // Verified clinician can view caseload reports
+test("Access Control: Authoritative caseload care relationships and isolation", () => {
+  // Pre-verified clinicians (Dr. Meera Joshi, Dr. Marcus Vance)
   const canMeeraViewAanya = authService.canViewSessionReport(DEMO_THERAPIST, "patient_aanya_rao");
   assert.equal(canMeeraViewAanya, true);
 
   const canMarcusViewDev = authService.canViewSessionReport(DEMO_THERAPIST_MARCUS, "sample_dev_patel");
   assert.equal(canMarcusViewDev, true);
 
-  // Unverified clinician cannot view arbitrary patients in local mode
-  const unverifiedTherapist = {
-    id: "pt_unverified_99",
-    email: "unverified@test.com",
-    fullName: "Dr. New Clinician",
+  // Local demo physiotherapist account (e.g. pt_46tzt682)
+  const localTherapist = {
+    id: "pt_46tzt682",
+    email: "local.therapist@athletemind.health",
+    fullName: "Dr. Local Practitioner, PT",
     role: "physiotherapist",
     isVerified: false,
     createdAt: new Date().toISOString(),
   };
 
-  const canUnverifiedViewOther = authService.canViewSessionReport(unverifiedTherapist, "sample_dev_patel");
-  assert.equal(canUnverifiedViewOther, false, "Unverified clinician cannot view arbitrary patient reports");
+  // 1. Can view their own scoped Aanya Rao card patient
+  const canViewOwnScopedAanya = authService.canViewSessionReport(localTherapist, "patient_aanya_pt_46tzt682");
+  assert.equal(canViewOwnScopedAanya, true, "Authorised local therapist must access their scoped Aanya Rao card");
 
-  const canUnverifiedViewScoped = authService.canViewSessionReport(
-    unverifiedTherapist,
-    `patient_aanya_${unverifiedTherapist.id}`
+  // 2. Can view standard caseload patient Dev Patel
+  const canViewDev = authService.canViewSessionReport(localTherapist, "sample_dev_patel");
+  assert.equal(canViewDev, true, "Authorised local therapist must access Dev Patel in their caseload");
+
+  // 3. Unrelated therapist CANNOT view patient_aanya_pt_46tzt682
+  const unrelatedTherapist = {
+    id: "pt_unrelated_stranger",
+    email: "stranger@athletemind.health",
+    fullName: "Dr. Unrelated Clinician, PT",
+    role: "physiotherapist",
+    isVerified: false,
+    createdAt: new Date().toISOString(),
+  };
+  const canUnrelatedView = authService.canViewSessionReport(unrelatedTherapist, "patient_aanya_pt_46tzt682");
+  assert.equal(canUnrelatedView, false, "Unrelated therapist MUST NOT access another therapist's scoped patient");
+
+  // 4. Patient role CANNOT view therapist reports
+  const patientUser = {
+    id: "patient_aanya_rao",
+    email: "patient.aanya@athletemind.health",
+    fullName: "Aanya Rao",
+    role: "patient",
+    isVerified: true,
+    createdAt: new Date().toISOString(),
+  };
+  assert.equal(
+    authService.canViewSessionReport(patientUser, "sample_dev_patel"),
+    false,
+    "Patient role cannot access therapist clinical report"
   );
-  assert.equal(canUnverifiedViewScoped, true, "Unverified clinician can view their own scoped patient");
+});
+
+test("Zero Sessions Handling: Authorised therapist can open report with 0 sessions", () => {
+  storage.clear();
+
+  const therapist = {
+    id: "pt_46tzt682",
+    email: "local.therapist@athletemind.health",
+    fullName: "Dr. Local Practitioner, PT",
+    role: "physiotherapist",
+    isVerified: false,
+    createdAt: new Date().toISOString(),
+  };
+
+  // Fictional admitted patient with zero saved sessions
+  const zeroSessionPatientId = "patient_zero_sessions_123";
+  // Admitted consultation
+  const consultation = {
+    id: "consult_zero_1",
+    patientId: zeroSessionPatientId,
+    patientName: "Karan Sharma",
+    therapistId: therapist.id,
+    therapistName: therapist.fullName,
+    status: "admitted",
+    concern: "Knee rehab",
+  };
+  storage.set("athletemind_consultations", JSON.stringify([consultation]));
+
+  // 1. Authorised
+  assert.equal(authService.canViewSessionReport(therapist, zeroSessionPatientId), true);
+
+  // 2. Reports list is genuinely empty (no fake Aanya reports injected)
+  const reports = getAllSessionReports(zeroSessionPatientId);
+  assert.equal(reports.length, 0, "Patient with no sessions must return empty array");
+
+  // 3. Weekly calendar renders accurately with plan schedule
+  const plan = getPublishedPlan(zeroSessionPatientId);
+  assert.ok(plan);
+  const { days } = getWeekDaysForAnchor("2026-11-24", plan, reports, "2026-11-24");
+  assert.equal(days.length, 7);
+
+  // Scheduled past day Nov 23 has no_session state
+  const mon = days.find((d) => d.dateStr === "2026-11-23");
+  assert.ok(mon);
+  assert.equal(mon.state, "no_session");
+  assert.equal(mon.statusLabel, "No session recorded");
+  assert.equal(mon.sessions.length, 0);
+
+  // Rest day Nov 24
+  const tue = days.find((d) => d.dateStr === "2026-11-24");
+  assert.ok(tue);
+  assert.equal(tue.state, "rest_day");
+  assert.equal(tue.statusLabel, "Rest day");
+  assert.equal(tue.sessions.length, 0);
 });

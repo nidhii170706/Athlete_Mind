@@ -19,3 +19,5 @@ build/
 *.zip
 .DS_Store
 .env*
+
+AthleteMind-Deployment.zip

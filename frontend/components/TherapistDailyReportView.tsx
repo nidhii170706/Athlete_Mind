@@ -105,7 +105,7 @@ export function TherapistDailyReportContent({ patientId }: TherapistDailyReportV
     router.push("/");
   };
 
-  if (!isMounted || isLoading || !patientPlan) {
+  if (!isMounted || isLoading) {
     return (
       <div className="min-h-screen bg-[#f8fafc] text-slate-800 flex items-center justify-center font-sans">
         <div className="flex flex-col items-center gap-3">
@@ -116,6 +116,31 @@ export function TherapistDailyReportContent({ patientId }: TherapistDailyReportV
     );
   }
 
+  // Not signed in
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-[#f8fafc] text-slate-800 flex items-center justify-center font-sans">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 rounded-full border-2 border-emerald-600 border-t-transparent animate-spin" />
+          <span className="text-xs text-slate-500 font-medium">Redirecting to login...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Role check: Only clinicians can view daily exercise reports
+  if (user.role !== "physiotherapist") {
+    return (
+      <div className="min-h-screen bg-[#f8fafc] text-slate-800 flex items-center justify-center font-sans">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 rounded-full border-2 border-emerald-600 border-t-transparent animate-spin" />
+          <span className="text-xs text-slate-500 font-medium">Redirecting...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Access control check: Must be authorized for this specific patient in caseload
   if (!canAccess) {
     return (
       <div className="min-h-screen bg-[#f8fafc] text-slate-800 flex items-center justify-center font-sans p-6">
@@ -124,6 +149,28 @@ export function TherapistDailyReportContent({ patientId }: TherapistDailyReportV
           <h2 className="text-lg font-bold text-slate-900">Restricted Clinical Record</h2>
           <p className="text-xs text-slate-500 leading-relaxed">
             Your clinical account does not have authorization to audit reports for patient ID:{" "}
+            <code className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-700">{patientId}</code>.
+          </p>
+          <Link
+            href="/therapist/workspace"
+            className="px-4 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs"
+          >
+            Return to Caseload
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // Unavailable data state: Plan is missing or unavailable
+  if (!patientPlan) {
+    return (
+      <div className="min-h-screen bg-[#f8fafc] text-slate-800 flex items-center justify-center font-sans p-6">
+        <div className="bg-white rounded-3xl border border-slate-200 p-8 max-w-md text-center shadow-lg flex flex-col items-center gap-4">
+          <span className="text-3xl">📋</span>
+          <h2 className="text-lg font-bold text-slate-900">Plan Record Unavailable</h2>
+          <p className="text-xs text-slate-500 leading-relaxed">
+            No published rehabilitation plan could be found for patient ID:{" "}
             <code className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-700">{patientId}</code>.
           </p>
           <Link

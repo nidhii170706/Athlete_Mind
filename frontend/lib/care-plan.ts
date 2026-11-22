@@ -600,7 +600,8 @@ export function getAllSessionReports(patientId?: string): SessionReport[] {
   const pid = patientId || "patient_aanya_rao";
   if (typeof window === "undefined") {
     if (pid === "sample_dev_patel") return [SEED_DEV_SESSION_REPORT];
-    return INITIAL_SEED_REPORTS;
+    if (pid === "patient_aanya_rao" || pid.startsWith("patient_aanya_")) return INITIAL_SEED_REPORTS;
+    return [];
   }
   const listKey = `athletemind_session_reports_list_${pid}`;
 
@@ -608,7 +609,7 @@ export function getAllSessionReports(patientId?: string): SessionReport[] {
     const raw = localStorage.getItem(listKey);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      if (Array.isArray(parsed)) return parsed;
     }
   } catch (e) {
     console.warn("Failed reading reports list", e);
@@ -619,16 +620,18 @@ export function getAllSessionReports(patientId?: string): SessionReport[] {
     return [SEED_DEV_SESSION_REPORT];
   }
 
-  // Fallback to latest single report plus baseline
-  const latest = getLatestSessionReport(patientId);
-  const reports = [latest];
-  if (latest.id !== SEED_AANYA_COMPLETED_REPORT.id) {
-    reports.push(SEED_AANYA_COMPLETED_REPORT);
+  // If this is an Aanya Rao patient (either global or scoped to this therapist)
+  if (pid === "patient_aanya_rao" || pid.startsWith("patient_aanya_")) {
+    const reports = [
+      { ...SEED_SESSION_REPORT, patientId: pid },
+      { ...SEED_AANYA_COMPLETED_REPORT, patientId: pid },
+      { ...SEED_BASELINE_REPORT, patientId: pid },
+    ];
+    return reports;
   }
-  if (latest.id !== SEED_BASELINE_REPORT.id) {
-    reports.push(SEED_BASELINE_REPORT);
-  }
-  return reports;
+
+  // For any other patient with no recorded sessions, return empty array honestly
+  return [];
 }
 
 export function getSessionReportById(sessionId?: string | null, patientId?: string): SessionReport {
