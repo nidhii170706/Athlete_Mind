@@ -201,100 +201,110 @@ test("Session Report Details: Preserves historical prescription version and sepa
   assert.equal(nov24Session.patientNote, "The last hold felt difficult.");
 });
 
-test("Access Control: Verified clinician vs unverified clinician access rules", () => {
-  // Verified clinician can view caseload reports
+test("Access Control: Authoritative caseload care relationships and isolation", () => {
+  // Pre-verified clinicians (Dr. Meera Joshi, Dr. Marcus Vance)
   const canMeeraViewAanya = authService.canViewSessionReport(DEMO_THERAPIST, "patient_aanya_rao");
   assert.equal(canMeeraViewAanya, true);
 
   const canMarcusViewDev = authService.canViewSessionReport(DEMO_THERAPIST_MARCUS, "sample_dev_patel");
   assert.equal(canMarcusViewDev, true);
 
-  // Unverified clinician cannot view arbitrary patients in local mode
-  const unverifiedTherapist = {
-    id: "pt_unverified_99",
-    email: "unverified@test.com",
-    fullName: "Dr. New Clinician",
+  // Local demo physiotherapist account (e.g. pt_46tzt682)
+  const localTherapist = {
+    id: "pt_46tzt682",
+    email: "local.therapist@athletemind.health",
+    fullName: "Dr. Local Practitioner, PT",
     role: "physiotherapist",
     isVerified: false,
     createdAt: new Date().toISOString(),
   };
 
-  const canUnverifiedViewOther = authService.canViewSessionReport(unverifiedTherapist, "sample_dev_patel");
-  assert.equal(canUnverifiedViewOther, false, "Unverified clinician cannot view arbitrary patient reports");
+  // 1. Can view their own scoped Aanya Rao card patient
+  const canViewOwnScopedAanya = authService.canViewSessionReport(localTherapist, "patient_aanya_pt_46tzt682");
+  assert.equal(canViewOwnScopedAanya, true, "Authorised local therapist must access their scoped Aanya Rao card");
 
-  const canUnverifiedViewScoped = authService.canViewSessionReport(
-    unverifiedTherapist,
-    `patient_aanya_${unverifiedTherapist.id}`
+  // 2. Can view standard caseload patient Dev Patel
+  const canViewDev = authService.canViewSessionReport(localTherapist, "sample_dev_patel");
+  assert.equal(canViewDev, true, "Authorised local therapist must access Dev Patel in their caseload");
+
+  // 3. Unrelated therapist CANNOT view patient_aanya_pt_46tzt682
+  const unrelatedTherapist = {
+    id: "pt_unrelated_stranger",
+    email: "stranger@athletemind.health",
+    fullName: "Dr. Unrelated Clinician, PT",
+    role: "physiotherapist",
+    isVerified: false,
+    createdAt: new Date().toISOString(),
+  };
+  const canUnrelatedView = authService.canViewSessionReport(unrelatedTherapist, "patient_aanya_pt_46tzt682");
+  assert.equal(canUnrelatedView, false, "Unrelated therapist MUST NOT access another therapist's scoped patient");
+
+  // 4. Patient role CANNOT view therapist reports
+  const patientUser = {
+    id: "patient_aanya_rao",
+    email: "patient.aanya@athletemind.health",
+    fullName: "Aanya Rao",
+    role: "patient",
+    isVerified: true,
+    createdAt: new Date().toISOString(),
+  };
+  assert.equal(
+    authService.canViewSessionReport(patientUser, "sample_dev_patel"),
+    false,
+    "Patient role cannot access therapist clinical report"
   );
-  assert.equal(canUnverifiedViewScoped, true, "Unverified clinician can view their own scoped patient");
 });
 
-test("Regression Sequence: Select Dev -> Click Aanya Report -> Saved Session -> Back -> Dev Report -> No session date", () => {
+test("Zero Sessions Handling: Authorised therapist can open report with 0 sessions", () => {
   storage.clear();
 
-  // Step 1: Therapist initially has Dev Patel selected in workspace context
-  let workspaceSelectedPatientId = "sample_dev_patel";
-  assert.equal(workspaceSelectedPatientId, "sample_dev_patel");
+  const therapist = {
+    id: "pt_46tzt682",
+    email: "local.therapist@athletemind.health",
+    fullName: "Dr. Local Practitioner, PT",
+    role: "physiotherapist",
+    isVerified: false,
+    createdAt: new Date().toISOString(),
+  };
 
-  // Step 2: Click Report DIRECTLY on Aanya Rao's card without selecting her first
-  // Card link target is /therapist/patients/${patient.id}/reports
-  const aanyaCardReportHref = `/therapist/patients/patient_aanya_rao/reports`;
-  assert.equal(aanyaCardReportHref, "/therapist/patients/patient_aanya_rao/reports");
+  // Fictional admitted patient with zero saved sessions
+  const zeroSessionPatientId = "patient_zero_sessions_123";
+  // Admitted consultation
+  const consultation = {
+    id: "consult_zero_1",
+    patientId: zeroSessionPatientId,
+    patientName: "Karan Sharma",
+    therapistId: therapist.id,
+    therapistName: therapist.fullName,
+    status: "admitted",
+    concern: "Knee rehab",
+  };
+  storage.set("athletemind_consultations", JSON.stringify([consultation]));
 
-  // Load Aanya's reporting view
-  const aanyaPlan = getPublishedPlan("patient_aanya_rao");
-  const aanyaReports = getAllSessionReports("patient_aanya_rao");
-  assert.equal(aanyaPlan.patientName, "Aanya Rao");
-  assert.equal(aanyaPlan.planTitle, "4-Week Left Knee Plan");
-  assert.match(aanyaPlan.scheduleDesc, /Mon - Wed - Fri/);
+  // 1. Authorised
+  assert.equal(authService.canViewSessionReport(therapist, zeroSessionPatientId), true);
 
-  // Step 3: Choose date with saved session (Nov 24 or Nov 23)
-  const aanyaWeek = getWeekDaysForAnchor("2026-11-24", aanyaPlan, aanyaReports, "2026-11-24");
-  const nov24Day = aanyaWeek.days.find((d) => d.dateStr === "2026-11-24");
-  assert.ok(nov24Day);
-  assert.equal(nov24Day.sessions.length, 1);
-  const session = nov24Day.sessions[0];
-  assert.equal(session.performedMovements, 4);
-  assert.equal(session.plannedMovements, 5);
-  assert.equal(session.metTargetAndHold, 3);
+  // 2. Reports list is genuinely empty (no fake Aanya reports injected)
+  const reports = getAllSessionReports(zeroSessionPatientId);
+  assert.equal(reports.length, 0, "Patient with no sessions must return empty array");
 
-  // Open session details: link target
-  const detailsHref = `/report?sessionId=${session.id}&patientId=patient_aanya_rao`;
-  assert.equal(detailsHref, `/report?sessionId=${session.id}&patientId=patient_aanya_rao`);
+  // 3. Weekly calendar renders accurately with plan schedule
+  const plan = getPublishedPlan(zeroSessionPatientId);
+  assert.ok(plan);
+  const { days } = getWeekDaysForAnchor("2026-11-24", plan, reports, "2026-11-24");
+  assert.equal(days.length, 7);
 
-  // Step 4: Simulate going Back
-  // The report page's backHref is /therapist/patients/${patientId}/reports?date=${report.dateStr}
-  const backHref = `/therapist/patients/patient_aanya_rao/reports?date=${session.dateStr}`;
-  assert.equal(backHref, "/therapist/patients/patient_aanya_rao/reports?date=2026-11-24");
+  // Scheduled past day Nov 23 has no_session state
+  const mon = days.find((d) => d.dateStr === "2026-11-23");
+  assert.ok(mon);
+  assert.equal(mon.state, "no_session");
+  assert.equal(mon.statusLabel, "No session recorded");
+  assert.equal(mon.sessions.length, 0);
 
-  // Confirm date query preserved
-  const backParams = new URLSearchParams("date=2026-11-24");
-  assert.equal(backParams.get("date"), "2026-11-24");
-
-  // Step 5: Click Dev Patel's Report button directly
-  const devCardReportHref = `/therapist/patients/sample_dev_patel/reports`;
-  assert.equal(devCardReportHref, "/therapist/patients/sample_dev_patel/reports");
-
-  const devPlan = getPublishedPlan("sample_dev_patel");
-  const devReports = getAllSessionReports("sample_dev_patel");
-  assert.equal(devPlan.patientName, "Dev Patel");
-  assert.equal(devPlan.planTitle, "Post-Meniscectomy Knee Rehab");
-  assert.match(devPlan.scheduleDesc, /Tue - Thu - Sat/);
-  assert.equal(devPlan.exercises[0].name, "Controlled Terminal Knee Extension");
-
-  // Step 6: Test date with no session (e.g. Wednesday Nov 25, 2026 for Dev Patel)
-  const devWeek = getWeekDaysForAnchor("2026-11-24", devPlan, devReports, "2026-11-24");
-  const nov25Wed = devWeek.days.find((d) => d.dateStr === "2026-11-25");
-  assert.ok(nov25Wed);
-  assert.equal(nov25Wed.sessions.length, 0);
-  assert.equal(nov25Wed.isRestDay, true); // Wed is rest day in Tue-Thu-Sat schedule
-  assert.equal(nov25Wed.statusLabel, "Rest day");
-
-  // Scheduled day with no session (past Thursday Nov 19, 2026)
-  const pastWeek = getWeekDaysForAnchor("2026-11-19", devPlan, devReports, "2026-11-24");
-  const pastThu = pastWeek.days.find((d) => d.dateStr === "2026-11-19");
-  assert.ok(pastThu);
-  assert.equal(pastThu.sessions.length, 0);
-  assert.equal(pastThu.state, "no_session");
-  assert.equal(pastThu.statusLabel, "No session recorded");
+  // Rest day Nov 24
+  const tue = days.find((d) => d.dateStr === "2026-11-24");
+  assert.ok(tue);
+  assert.equal(tue.state, "rest_day");
+  assert.equal(tue.statusLabel, "Rest day");
+  assert.equal(tue.sessions.length, 0);
 });

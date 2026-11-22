@@ -212,7 +212,42 @@ class AuthService {
   ): Promise<{ success: boolean; session?: AuthSession; error?: string; mismatchRole?: UserRole }> {
     const normalizedEmail = email.trim().toLowerCase();
 
-    // 1. Supabase Auth when configured
+    // 1. Prioritize local stored and demo accounts so local demo mode works seamlessly
+    // even if background Supabase keys are incomplete, invalid, or offline.
+    const demoAccounts = [DEMO_PATIENT, DEMO_PATIENT_UNLINKED, DEMO_THERAPIST, DEMO_THERAPIST_MARCUS];
+    const matchingDemo = demoAccounts.find((d) => d.email.toLowerCase() === normalizedEmail);
+
+    const users = getStoredUsers();
+    const localRecord = users[normalizedEmail];
+
+    // If updated profile was stored (e.g. admitted consultation), use stored profile
+    const activeProfile = localRecord ? localRecord.profile : matchingDemo;
+
+    if (activeProfile) {
+      if (activeProfile.role !== expectedRole) {
+        return {
+          success: false,
+          error: `This account is registered as a ${
+            activeProfile.role === "physiotherapist" ? "Physiotherapist" : "Patient"
+          }. Please use the matching portal.`,
+          mismatchRole: activeProfile.role,
+        };
+      }
+      const expectedPwd = activeProfile.role === "physiotherapist" ? "therapist123" : "athlete123";
+      if (localRecord) {
+        if (localRecord.passwordHash !== hashPassword(password)) {
+          return { success: false, error: "Incorrect password. Please verify your credentials and try again." };
+        }
+      } else {
+        if (password !== expectedPwd && password !== "athlete123" && password !== "therapist123") {
+          return { success: false, error: "Incorrect password. Please verify your credentials and try again." };
+        }
+      }
+      const session = this.setSession(activeProfile);
+      return { success: true, session };
+    }
+
+    // 2. Supabase Auth when configured
     if (isSupabaseConfigured() && supabase) {
       try {
         const { data, error } = await supabase.auth.signInWithPassword({
@@ -220,6 +255,9 @@ class AuthService {
           password,
         });
         if (error) {
+          if (localRecord) {
+            return { success: false, error: "Incorrect password. Please verify your credentials and try again." };
+          }
           return { success: false, error: error.message };
         }
         if (data.user) {
@@ -260,40 +298,39 @@ class AuthService {
           return { success: true, session };
         }
       } catch (err: any) {
+        if (localRecord) {
+          return { success: false, error: "Incorrect password. Please verify your credentials and try again." };
+        }
         return { success: false, error: err.message || "Failed connecting to authentication service." };
       }
     }
 
-    // 2. Local Fallback Auth Engine
-    const users = getStoredUsers();
-    const record = users[normalizedEmail];
-
-    if (!record) {
+    // 3. Local Fallback Auth Engine for non-demo users
+    if (!localRecord) {
       return {
         success: false,
         error: "No account found with this email address. Please check your spelling or sign up.",
       };
     }
 
-    if (record.passwordHash !== hashPassword(password)) {
+    if (localRecord.passwordHash !== hashPassword(password)) {
       return {
         success: false,
         error: "Incorrect password. Please verify your credentials and try again.",
       };
     }
 
-    // Strict Role Mismatch Check
-    if (record.profile.role !== expectedRole) {
+    if (localRecord.profile.role !== expectedRole) {
       return {
         success: false,
         error: `This account is registered as a ${
-          record.profile.role === "physiotherapist" ? "Physiotherapist" : "Patient"
+          localRecord.profile.role === "physiotherapist" ? "Physiotherapist" : "Patient"
         }, not a ${expectedRole === "physiotherapist" ? "Physiotherapist" : "Patient"}.`,
-        mismatchRole: record.profile.role,
+        mismatchRole: localRecord.profile.role,
       };
     }
 
-    const session = this.setSession(record.profile);
+    const session = this.setSession(localRecord.profile);
     return { success: true, session };
   }
 
@@ -510,40 +547,74 @@ class AuthService {
     return user?.role === "physiotherapist";
   }
 
-  canEditCarePlan(user: UserProfile | null, patientId?: string): boolean {
+  isPatientInTherapistCaseload(user: UserProfile | null, patientId?: string): boolean {
     if (!user || user.role !== "physiotherapist") return false;
-    // Verified clinicians can edit assigned patients
-    if (user.isVerified) {
-      if (user.id === DEMO_THERAPIST.id && (!patientId || patientId === DEMO_PATIENT.id)) {
-        return true;
-      }
+    if (!patientId) return true;
+
+    // 1. Scoped primary demo patient (Aanya Rao)
+    const isMeeraOrMarcus = user.id === "therapist_meera_joshi" || user.id === "therapist_marcus_vance";
+    const myScopedId = isMeeraOrMarcus ? "patient_aanya_rao" : `patient_aanya_${user.id}`;
+
+    // Direct match to this therapist's scoped patient ID (e.g. patient_aanya_pt_46tzt682)
+    if (patientId === myScopedId) return true;
+
+    // Global Aanya Rao ID belongs to Meera Joshi & Marcus Vance
+    if (patientId === "patient_aanya_rao" && isMeeraOrMarcus) {
       return true;
     }
-    // In local demo mode: unverified physiotherapist can access and edit their OWN scoped demo patient
-    if (this.getAuthMode() === "local") {
-      const scopedId = `patient_aanya_${user.id}`;
-      if (!patientId || patientId === scopedId) {
-        return true;
-      }
+
+    // Security boundary: If patientId is explicitly scoped to a DIFFERENT therapist (e.g. patient_aanya_pt_OTHER)
+    if (patientId.startsWith("patient_aanya_") && patientId !== myScopedId && patientId !== "patient_aanya_rao") {
       return false;
     }
+
+    // 2. Standard Caseload Patients in demo mode (Dev Patel)
+    if (patientId === "sample_dev_patel") {
+      return true;
+    }
+
+    // 3. Admitted Consultation Requests
+    if (typeof window !== "undefined") {
+      try {
+        const rawConsults = localStorage.getItem("athletemind_consultations");
+        if (rawConsults) {
+          const list = JSON.parse(rawConsults);
+          if (Array.isArray(list)) {
+            const hasAdmitted = list.some(
+              (c: any) => c.therapistId === user.id && c.status === "admitted" && c.patientId === patientId
+            );
+            if (hasAdmitted) return true;
+          }
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    // 4. Pre-verified clinicians auditing records
+    if (user.isVerified) {
+      if (patientId === "patient_aanya_rao" || patientId === "sample_dev_patel") {
+        return true;
+      }
+    }
+
     return false;
+  }
+
+  canEditCarePlan(user: UserProfile | null, patientId?: string): boolean {
+    if (!user || user.role !== "physiotherapist") return false;
+    return this.isPatientInTherapistCaseload(user, patientId);
   }
 
   canViewSessionReport(user: UserProfile | null, patientId?: string): boolean {
     if (!user) return false;
-    // Patient can view their own report
+    // Patient can ONLY view their own report
     if (user.role === "patient") {
-      return !patientId || user.id === patientId || user.id === DEMO_PATIENT.id;
+      return !patientId || user.id === patientId;
     }
     // Physiotherapist
     if (user.role === "physiotherapist") {
-      if (user.isVerified) return true;
-      if (this.getAuthMode() === "local") {
-        const scopedId = `patient_aanya_${user.id}`;
-        return !patientId || patientId === scopedId;
-      }
-      return false;
+      return this.isPatientInTherapistCaseload(user, patientId);
     }
     return false;
   }

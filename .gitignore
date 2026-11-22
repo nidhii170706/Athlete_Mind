@@ -18,3 +18,5 @@ build/
 *.tsbuildinfo
 .DS_Store
 .env*
+
+AthleteMind-Deployment.zip
