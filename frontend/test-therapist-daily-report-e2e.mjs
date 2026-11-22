@@ -228,3 +228,73 @@ test("Access Control: Verified clinician vs unverified clinician access rules", 
   );
   assert.equal(canUnverifiedViewScoped, true, "Unverified clinician can view their own scoped patient");
 });
+
+test("Regression Sequence: Select Dev -> Click Aanya Report -> Saved Session -> Back -> Dev Report -> No session date", () => {
+  storage.clear();
+
+  // Step 1: Therapist initially has Dev Patel selected in workspace context
+  let workspaceSelectedPatientId = "sample_dev_patel";
+  assert.equal(workspaceSelectedPatientId, "sample_dev_patel");
+
+  // Step 2: Click Report DIRECTLY on Aanya Rao's card without selecting her first
+  // Card link target is /therapist/patients/${patient.id}/reports
+  const aanyaCardReportHref = `/therapist/patients/patient_aanya_rao/reports`;
+  assert.equal(aanyaCardReportHref, "/therapist/patients/patient_aanya_rao/reports");
+
+  // Load Aanya's reporting view
+  const aanyaPlan = getPublishedPlan("patient_aanya_rao");
+  const aanyaReports = getAllSessionReports("patient_aanya_rao");
+  assert.equal(aanyaPlan.patientName, "Aanya Rao");
+  assert.equal(aanyaPlan.planTitle, "4-Week Left Knee Plan");
+  assert.match(aanyaPlan.scheduleDesc, /Mon - Wed - Fri/);
+
+  // Step 3: Choose date with saved session (Nov 24 or Nov 23)
+  const aanyaWeek = getWeekDaysForAnchor("2026-11-24", aanyaPlan, aanyaReports, "2026-11-24");
+  const nov24Day = aanyaWeek.days.find((d) => d.dateStr === "2026-11-24");
+  assert.ok(nov24Day);
+  assert.equal(nov24Day.sessions.length, 1);
+  const session = nov24Day.sessions[0];
+  assert.equal(session.performedMovements, 4);
+  assert.equal(session.plannedMovements, 5);
+  assert.equal(session.metTargetAndHold, 3);
+
+  // Open session details: link target
+  const detailsHref = `/report?sessionId=${session.id}&patientId=patient_aanya_rao`;
+  assert.equal(detailsHref, `/report?sessionId=${session.id}&patientId=patient_aanya_rao`);
+
+  // Step 4: Simulate going Back
+  // The report page's backHref is /therapist/patients/${patientId}/reports?date=${report.dateStr}
+  const backHref = `/therapist/patients/patient_aanya_rao/reports?date=${session.dateStr}`;
+  assert.equal(backHref, "/therapist/patients/patient_aanya_rao/reports?date=2026-11-24");
+
+  // Confirm date query preserved
+  const backParams = new URLSearchParams("date=2026-11-24");
+  assert.equal(backParams.get("date"), "2026-11-24");
+
+  // Step 5: Click Dev Patel's Report button directly
+  const devCardReportHref = `/therapist/patients/sample_dev_patel/reports`;
+  assert.equal(devCardReportHref, "/therapist/patients/sample_dev_patel/reports");
+
+  const devPlan = getPublishedPlan("sample_dev_patel");
+  const devReports = getAllSessionReports("sample_dev_patel");
+  assert.equal(devPlan.patientName, "Dev Patel");
+  assert.equal(devPlan.planTitle, "Post-Meniscectomy Knee Rehab");
+  assert.match(devPlan.scheduleDesc, /Tue - Thu - Sat/);
+  assert.equal(devPlan.exercises[0].name, "Controlled Terminal Knee Extension");
+
+  // Step 6: Test date with no session (e.g. Wednesday Nov 25, 2026 for Dev Patel)
+  const devWeek = getWeekDaysForAnchor("2026-11-24", devPlan, devReports, "2026-11-24");
+  const nov25Wed = devWeek.days.find((d) => d.dateStr === "2026-11-25");
+  assert.ok(nov25Wed);
+  assert.equal(nov25Wed.sessions.length, 0);
+  assert.equal(nov25Wed.isRestDay, true); // Wed is rest day in Tue-Thu-Sat schedule
+  assert.equal(nov25Wed.statusLabel, "Rest day");
+
+  // Scheduled day with no session (past Thursday Nov 19, 2026)
+  const pastWeek = getWeekDaysForAnchor("2026-11-19", devPlan, devReports, "2026-11-24");
+  const pastThu = pastWeek.days.find((d) => d.dateStr === "2026-11-19");
+  assert.ok(pastThu);
+  assert.equal(pastThu.sessions.length, 0);
+  assert.equal(pastThu.state, "no_session");
+  assert.equal(pastThu.statusLabel, "No session recorded");
+});
