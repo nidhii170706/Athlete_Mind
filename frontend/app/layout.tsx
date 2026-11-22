@@ -3,6 +3,8 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth-context";
 
+const siteUrl = "https://athlete-mindai-udbt.onrender.com";
+
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -14,8 +16,37 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AthleteMind — Clinical Rehabilitation & Gamified Gauntlet",
-  description: "Kinetic Aegis biomechanics & clinical physical therapy portal",
+  metadataBase: new URL(siteUrl),
+  title: {
+    default: "AthleteMind — Clinical Rehabilitation & AI Biomechanics Coach",
+    template: "%s | AthleteMind",
+  },
+  description:
+    "Train smarter with AthleteMind, an AI-powered biomechanics platform for real-time exercise form tracking, clinical physical therapy, and performance insights.",
+  alternates: {
+    canonical: "/",
+  },
+  openGraph: {
+    type: "website",
+    url: siteUrl,
+    siteName: "AthleteMind",
+    title: "AthleteMind | AI-Powered Biomechanics Coach & Clinical Portal",
+    description:
+      "Real-time exercise form tracking, movement analysis, and clinical physical therapy powered by AI.",
+    images: [
+      {
+        url: "/main-menu-bg.jpg",
+        alt: "AthleteMind biomechanics training interface",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "AthleteMind | AI-Powered Biomechanics Coach & Clinical Portal",
+    description:
+      "Real-time exercise form tracking, movement analysis, and clinical physical therapy powered by AI.",
+    images: ["/main-menu-bg.jpg"],
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
