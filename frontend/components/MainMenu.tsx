@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import Link from "next/link";
 
 export type ActiveView =
   | "MAIN_MENU"
@@ -139,6 +140,41 @@ export const MainMenu: React.FC<MainMenuProps> = ({
             <span>⚡</span>
             <span>{energyCores} CORES</span>
           </div>
+        </div>
+
+        {/* Clinical Portal & Role Auth Entry Strip */}
+        <div className="w-full flex flex-wrap items-center justify-center gap-2 pt-2.5 border-t border-slate-800/80 text-[11px] font-mono">
+          <Link
+            href="/care"
+            className="px-4 py-1 rounded-lg bg-teal-600 hover:bg-teal-500 text-white font-black transition-all shadow-[0_0_15px_rgba(20,184,166,0.5)] flex items-center gap-1.5"
+          >
+            <span>🛡️</span>
+            <span>Care Portal (Sign In / Choose Role)</span>
+          </Link>
+          <Link
+            href="/therapist/workspace"
+            className="px-3 py-1 rounded-lg bg-emerald-950/70 hover:bg-emerald-900 border border-emerald-500/40 hover:border-emerald-400 text-emerald-300 font-bold transition-all shadow-xs"
+          >
+            🩺 Therapist Caseload
+          </Link>
+          <Link
+            href="/today"
+            className="px-3 py-1 rounded-lg bg-cyan-950/70 hover:bg-cyan-900 border border-cyan-500/40 hover:border-cyan-400 text-cyan-300 font-bold transition-all shadow-xs"
+          >
+            📋 Patient Today
+          </Link>
+          <Link
+            href="/hangar"
+            className="px-3 py-1 rounded-lg bg-blue-950/70 hover:bg-blue-900 border border-blue-500/40 hover:border-blue-400 text-blue-300 font-bold transition-all shadow-xs"
+          >
+            🚀 Mission Hangar
+          </Link>
+          <Link
+            href="/report"
+            className="px-3 py-1 rounded-lg bg-amber-950/70 hover:bg-amber-900 border border-amber-500/40 hover:border-amber-400 text-amber-300 font-bold transition-all shadow-xs"
+          >
+            📊 Shared Report
+          </Link>
         </div>
       </header>
 
