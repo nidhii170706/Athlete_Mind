@@ -166,6 +166,44 @@ export function validatePassword(password: string): { valid: boolean; error?: st
 }
 
 // ---------------------------------------------------------------------------
+// Supabase Error Formatter
+// ---------------------------------------------------------------------------
+export function formatSupabaseAuthError(rawMessage?: string): string {
+  if (!rawMessage) return "Authentication service error. Please try again.";
+  const msg = rawMessage.toLowerCase();
+  if (
+    msg.includes("email not confirmed") ||
+    msg.includes("email link is invalid or has expired")
+  ) {
+    return "Your email address has not been confirmed yet. Please check your inbox for the confirmation link from Supabase, or turn off 'Confirm email' in Supabase Dashboard -> Authentication -> Providers -> Email.";
+  }
+  if (
+    msg.includes("invalid login credentials") ||
+    msg.includes("invalid_credentials") ||
+    msg.includes("invalid grant")
+  ) {
+    return "Invalid email or password. Please verify your credentials and try again.";
+  }
+  if (
+    msg.includes("user already registered") ||
+    msg.includes("already registered")
+  ) {
+    return "An account with this email address already exists. Please sign in instead.";
+  }
+  if (msg.includes("password should be at least")) {
+    return "Password does not meet security requirements. Please use at least 8 characters.";
+  }
+  if (
+    msg.includes("rate limit") ||
+    msg.includes("rate_limit") ||
+    msg.includes("too many requests")
+  ) {
+    return "Too many requests. Please wait a few moments before trying again.";
+  }
+  return rawMessage;
+}
+
+// ---------------------------------------------------------------------------
 // Auth Service Core
 // ---------------------------------------------------------------------------
 class AuthService {
@@ -193,7 +231,7 @@ class AuthService {
     return this.getCurrentSession()?.user || null;
   }
 
-  private setSession(user: UserProfile): AuthSession {
+  setSession(user: UserProfile): AuthSession {
     const session: AuthSession = {
       user,
       token: `tok_${Math.random().toString(36).substring(2)}_${Date.now()}`,
@@ -201,6 +239,9 @@ class AuthService {
     };
     if (typeof window !== "undefined") {
       localStorage.setItem(STORAGE_SESSION_KEY, JSON.stringify(session));
+      if (typeof window.dispatchEvent === "function") {
+        window.dispatchEvent(new Event("athletemind_auth_change"));
+      }
     }
     return session;
   }
@@ -220,47 +261,102 @@ class AuthService {
           password,
         });
         if (error) {
-          return { success: false, error: error.message };
+          return { success: false, error: formatSupabaseAuthError(error.message) };
         }
         if (data.user) {
-          // Fetch user profile from public.profiles
+          // Fetch user profile from public.profiles using maybeSingle()
           const { data: profileData, error: profileErr } = await supabase
             .from("profiles")
             .select("*")
             .eq("id", data.user.id)
-            .single();
+            .maybeSingle();
 
-          if (profileErr || !profileData) {
-            return { success: false, error: "Profile not found for this account." };
+          if (profileErr) {
+            console.error("Database query error for profile:", profileErr);
+            return {
+              success: false,
+              error: `Database error while retrieving profile (${profileErr.code || profileErr.message}). Please verify database table and permissions.`,
+            };
+          }
+
+          let finalProfile: UserProfile;
+
+          if (!profileData) {
+            // Self-healing: user exists in auth.users (e.g. created via dashboard or before trigger was enabled)
+            // Securely create/upsert profile row ONLY for authenticated user's own id (auth.uid() = id)
+            const meta = data.user.user_metadata || {};
+            const resolvedRole: UserRole =
+              meta.role === "physiotherapist" || meta.role === "patient"
+                ? meta.role
+                : expectedRole;
+            const resolvedFullName =
+              meta.full_name ||
+              (typeof data.user.email === "string" ? data.user.email.split("@")[0] : "User");
+
+            const profileToUpsert = {
+              id: data.user.id,
+              email: normalizedEmail,
+              full_name: resolvedFullName,
+              role: resolvedRole,
+              qualification: meta.qualification || null,
+              area_of_practice: meta.area_of_practice || null,
+              is_verified: resolvedRole === "physiotherapist" ? false : true,
+            };
+
+            const { data: createdProfile, error: insertErr } = await supabase
+              .from("profiles")
+              .upsert(profileToUpsert)
+              .select()
+              .single();
+
+            if (insertErr || !createdProfile) {
+              console.error("Failed to auto-create profile for authenticated user:", insertErr);
+              return {
+                success: false,
+                error: `Account authenticated, but profile record could not be loaded or created: ${insertErr?.message || "Missing database profile"}. Please run the Supabase database migration.`,
+              };
+            }
+
+            finalProfile = {
+              id: createdProfile.id,
+              email: createdProfile.email,
+              fullName: createdProfile.full_name,
+              role: createdProfile.role,
+              qualification: createdProfile.qualification || undefined,
+              areaOfPractice: createdProfile.area_of_practice || undefined,
+              isVerified: createdProfile.is_verified,
+              createdAt: createdProfile.created_at,
+            };
+          } else {
+            finalProfile = {
+              id: profileData.id,
+              email: profileData.email,
+              fullName: profileData.full_name,
+              role: profileData.role,
+              qualification: profileData.qualification || undefined,
+              areaOfPractice: profileData.area_of_practice || undefined,
+              isVerified: profileData.is_verified,
+              createdAt: profileData.created_at,
+            };
           }
 
           // Check role mismatch
-          if (profileData.role !== expectedRole) {
+          if (finalProfile.role !== expectedRole) {
             await supabase.auth.signOut();
             return {
               success: false,
               error: `This account is registered as a ${
-                profileData.role === "physiotherapist" ? "Physiotherapist" : "Patient"
+                finalProfile.role === "physiotherapist" ? "Physiotherapist" : "Patient"
               }. Please use the matching portal.`,
-              mismatchRole: profileData.role,
+              mismatchRole: finalProfile.role,
             };
           }
 
-          const profile: UserProfile = {
-            id: profileData.id,
-            email: profileData.email,
-            fullName: profileData.full_name,
-            role: profileData.role,
-            qualification: profileData.qualification,
-            areaOfPractice: profileData.area_of_practice,
-            isVerified: profileData.is_verified,
-            createdAt: profileData.created_at,
-          };
-          const session = this.setSession(profile);
+          const session = this.setSession(finalProfile);
           return { success: true, session };
         }
       } catch (err: any) {
-        return { success: false, error: err.message || "Failed connecting to authentication service." };
+        return { success: false, error: formatSupabaseAuthError(err.message || "Failed connecting to authentication service.") };
       }
     }
 
@@ -322,8 +418,33 @@ class AuthService {
             },
           },
         });
-        if (error) return { success: false, error: error.message };
+        if (error) return { success: false, error: formatSupabaseAuthError(error.message) };
         if (data.user) {
+          // If email confirmation is required and no session was issued
+          if (!data.session && data.user.identities && data.user.identities.length > 0) {
+            return {
+              success: false,
+              error:
+                "Account created! A confirmation email has been dispatched. Please click the link in your email to activate your account, or disable 'Confirm email' in Supabase Authentication settings.",
+            };
+          }
+
+          // Securely write profile for authenticated user's own id
+          try {
+            await supabase.from("profiles").upsert({
+              id: data.user.id,
+              email: normalizedEmail,
+              full_name: input.fullName.trim(),
+              role: "patient",
+              is_verified: true,
+            });
+          } catch (profileUpsertErr) {
+            console.warn(
+              "Client profile upsert attempted; database trigger will handle persistence:",
+              profileUpsertErr
+            );
+          }
+
           const profile: UserProfile = {
             id: data.user.id,
             email: normalizedEmail,
@@ -337,7 +458,7 @@ class AuthService {
           return { success: true, session };
         }
       } catch (err: any) {
-        return { success: false, error: err.message };
+        return { success: false, error: formatSupabaseAuthError(err.message) };
       }
     }
 
@@ -405,8 +526,35 @@ class AuthService {
             },
           },
         });
-        if (error) return { success: false, error: error.message };
+        if (error) return { success: false, error: formatSupabaseAuthError(error.message) };
         if (data.user) {
+          // If email confirmation is required and no session was issued
+          if (!data.session && data.user.identities && data.user.identities.length > 0) {
+            return {
+              success: false,
+              error:
+                "Physiotherapist account registered! A confirmation email has been dispatched. Please click the link in your email to activate your account, or disable 'Confirm email' in Supabase Authentication settings.",
+            };
+          }
+
+          // Securely write profile for authenticated user's own id
+          try {
+            await supabase.from("profiles").upsert({
+              id: data.user.id,
+              email: normalizedEmail,
+              full_name: input.fullName.trim(),
+              role: "physiotherapist",
+              qualification: input.qualification.trim(),
+              area_of_practice: input.areaOfPractice.trim(),
+              is_verified: false,
+            });
+          } catch (profileUpsertErr) {
+            console.warn(
+              "Client profile upsert attempted; database trigger will handle persistence:",
+              profileUpsertErr
+            );
+          }
+
           const profile: UserProfile = {
             id: data.user.id,
             email: normalizedEmail,
@@ -421,7 +569,7 @@ class AuthService {
           return { success: true, session };
         }
       } catch (err: any) {
-        return { success: false, error: err.message };
+        return { success: false, error: formatSupabaseAuthError(err.message) };
       }
     }
 
@@ -492,10 +640,15 @@ class AuthService {
     if (isSupabaseConfigured() && supabase) {
       try {
         await supabase.auth.signOut();
-      } catch (e) {}
+      } catch (e) {
+        console.warn("Supabase sign out notice:", e);
+      }
     }
     if (typeof window !== "undefined") {
       localStorage.removeItem(STORAGE_SESSION_KEY);
+      if (typeof window.dispatchEvent === "function") {
+        window.dispatchEvent(new Event("athletemind_auth_change"));
+      }
     }
   }
 

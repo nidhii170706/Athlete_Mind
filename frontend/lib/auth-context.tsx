@@ -9,6 +9,7 @@ import {
   TherapistSignupInput,
   authService,
 } from "./auth-service";
+import { isSupabaseConfigured, supabase } from "./supabase";
 
 interface AuthContextType {
   user: UserProfile | null;
@@ -37,19 +38,106 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const authMode = authService.getAuthMode();
 
   useEffect(() => {
-    const session = authService.getCurrentSession();
-    if (session) {
-      setUser(session.user);
+    let isMounted = true;
+
+    // 1. Initial hydration from local session storage
+    const localSession = authService.getCurrentSession();
+    if (localSession) {
+      setUser(localSession.user);
     }
-    setIsLoading(false);
 
-    const handleAuthChange = () => {
-      const s = authService.getCurrentSession();
-      setUser(s ? s.user : null);
-    };
+    // 2. If Supabase is configured, synchronize with getSession() and onAuthStateChange()
+    if (isSupabaseConfigured() && supabase) {
+      const client = supabase;
+      client.auth.getSession().then(({ data, error }) => {
+        if (!isMounted) return;
+        if (error) {
+          console.warn("Supabase getSession notice:", error.message);
+        }
+        const session = data?.session;
+        if (session?.user) {
+          client
+            .from("profiles")
+            .select("*")
+            .eq("id", session.user.id)
+            .maybeSingle()
+            .then(({ data: profileData, error: profileErr }) => {
+              if (!isMounted) return;
+              if (profileData) {
+                const profile: UserProfile = {
+                  id: profileData.id,
+                  email: profileData.email,
+                  fullName: profileData.full_name,
+                  role: profileData.role,
+                  qualification: profileData.qualification || undefined,
+                  areaOfPractice: profileData.area_of_practice || undefined,
+                  isVerified: profileData.is_verified,
+                  createdAt: profileData.created_at,
+                };
+                setUser(profile);
+                authService.setSession(profile);
+              } else if (profileErr) {
+                console.warn("Could not load profile during session sync:", profileErr.message);
+              }
+            });
+        }
+        setIsLoading(false);
+      });
 
-    window.addEventListener("athletemind_auth_change", handleAuthChange);
-    return () => window.removeEventListener("athletemind_auth_change", handleAuthChange);
+      const { data: authListener } = client.auth.onAuthStateChange(
+        async (event, session) => {
+          if (!isMounted) return;
+          if (event === "SIGNED_OUT") {
+            setUser(null);
+          } else if (session?.user && (event === "SIGNED_IN" || event === "TOKEN_REFRESHED")) {
+            const { data: profileData } = await client
+              .from("profiles")
+              .select("*")
+              .eq("id", session.user.id)
+              .maybeSingle();
+
+            if (profileData && isMounted) {
+              const profile: UserProfile = {
+                id: profileData.id,
+                email: profileData.email,
+                fullName: profileData.full_name,
+                role: profileData.role,
+                qualification: profileData.qualification || undefined,
+                areaOfPractice: profileData.area_of_practice || undefined,
+                isVerified: profileData.is_verified,
+                createdAt: profileData.created_at,
+              };
+              setUser(profile);
+              authService.setSession(profile);
+            }
+          }
+        }
+      );
+
+      const handleAuthChange = () => {
+        const s = authService.getCurrentSession();
+        setUser(s ? s.user : null);
+      };
+
+      window.addEventListener("athletemind_auth_change", handleAuthChange);
+      return () => {
+        isMounted = false;
+        authListener.subscription.unsubscribe();
+        window.removeEventListener("athletemind_auth_change", handleAuthChange);
+      };
+    } else {
+      setIsLoading(false);
+      const handleAuthChange = () => {
+        const s = authService.getCurrentSession();
+        setUser(s ? s.user : null);
+      };
+
+      window.addEventListener("athletemind_auth_change", handleAuthChange);
+      return () => {
+        isMounted = false;
+        window.removeEventListener("athletemind_auth_change", handleAuthChange);
+      };
+    }
   }, []);
 
   const signIn = async (email: string, password: string, expectedRole: UserRole) => {
