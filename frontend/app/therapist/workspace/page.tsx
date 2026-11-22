@@ -1,46 +1,16 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { getScopedPatientId, getPublishedPlan } from "@/lib/care-plan";
-
-interface ConsultationRequest {
-  id: string;
-  patientName: string;
-  age: number;
-  condition: string;
-  requestedDate: string;
-  referralSource: string;
-  status: "pending" | "admitted";
-  clinicalSummary: string;
-}
-
-const SAMPLE_CONSULTATION_REQUESTS: ConsultationRequest[] = [
-  {
-    id: "consult_rohan_01",
-    patientName: "Rohan Varma",
-    age: 34,
-    condition: "Post-ACL Reconstruction (Week 6)",
-    requestedDate: "Nov 23, 2026",
-    referralSource: "City Sports Medicine Clinic",
-    status: "pending",
-    clinicalSummary:
-      "Patient cleared for progressive closed-chain flexion exercises. Requires biomechanical monitoring of knee angles during deflection drills.",
-  },
-  {
-    id: "consult_priya_02",
-    patientName: "Priya Nair",
-    age: 28,
-    condition: "Patellar Tendinopathy (Right Knee)",
-    requestedDate: "Nov 22, 2026",
-    referralSource: "Athletics Federation Medical Unit",
-    status: "pending",
-    clinicalSummary:
-      "Chronic infrapatellar tendon pain during eccentric loading. Requesting isometric hold protocol calibration.",
-  },
-];
+import {
+  ConsultationRequestRecord,
+  getTherapistConsultationRequests,
+  acceptConsultationRequest,
+  declineConsultationRequest,
+} from "@/lib/consultations";
 
 export default function TherapistWorkspacePage() {
   const router = useRouter();
@@ -57,11 +27,30 @@ export default function TherapistWorkspacePage() {
   const [showPatientPicker, setShowPatientPicker] = useState<"editor" | "reports" | "messages" | null>(null);
 
   // Consultation requests list
-  const [consultations, setConsultations] = useState<ConsultationRequest[]>(SAMPLE_CONSULTATION_REQUESTS);
+  const [consultations, setConsultations] = useState<ConsultationRequestRecord[]>([]);
+
+  const loadConsultations = useCallback(() => {
+    if (user?.id) {
+      const list = getTherapistConsultationRequests(user.id);
+      setConsultations(list);
+    }
+  }, [user?.id]);
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
+
+  useEffect(() => {
+    loadConsultations();
+  }, [loadConsultations]);
+
+  useEffect(() => {
+    const handleUpdate = () => {
+      loadConsultations();
+    };
+    window.addEventListener("athletemind_consultations_updated", handleUpdate);
+    return () => window.removeEventListener("athletemind_consultations_updated", handleUpdate);
+  }, [loadConsultations]);
 
   // Auth guard: Must be signed in as a physiotherapist
   useEffect(() => {
@@ -96,7 +85,7 @@ export default function TherapistWorkspacePage() {
   const activeEx = patientPlan.exercises[0];
 
   // Patients in caseload
-  const caseloadPatients = [
+  const baseCaseload = [
     {
       id: scopedPatientId,
       name: "Aanya Rao",
@@ -129,6 +118,34 @@ export default function TherapistWorkspacePage() {
     },
   ];
 
+  // Dynamically include patients admitted through consultation requests
+  const admittedPatients = consultations
+    .filter((c) => c.status === "admitted")
+    .map((c) => {
+      const pPlan = getPublishedPlan(c.patientId);
+      const ex = pPlan.exercises[0] || activeEx;
+      return {
+        id: c.patientId,
+        name: c.patientName,
+        initials: c.patientName
+          .replace(/^Dr\.\s+/i, "")
+          .split(" ")
+          .map((n) => n[0])
+          .join("")
+          .slice(0, 2),
+        color: "bg-emerald-100 border-emerald-300 text-emerald-800",
+        planTitle: pPlan.planTitle || "Personalized Knee Rehabilitation Protocol",
+        version: pPlan.version || 1,
+        schedule: pPlan.scheduleDesc || "Mon - Wed - Fri schedule",
+        exercise: ex,
+        status: "Active",
+        isPrimaryDemo: false,
+      };
+    })
+    .filter((p) => !baseCaseload.some((b) => b.id === p.id));
+
+  const caseloadPatients = [...baseCaseload, ...admittedPatients];
+
   const handleSelectPatient = (pid: string) => {
     if (selectedPatientId === pid) {
       setSelectedPatientId(null);
@@ -154,8 +171,11 @@ export default function TherapistWorkspacePage() {
 
   const handleReportsClick = (e: React.MouseEvent) => {
     e.preventDefault();
-    const pid = selectedPatientId || scopedPatientId;
-    router.push(`/report?patientId=${pid}`);
+    if (selectedPatientId) {
+      router.push(`/therapist/patients/${selectedPatientId}/reports`);
+    } else {
+      setShowPatientPicker("reports");
+    }
   };
 
   const handlePickerSelect = (pid: string) => {
@@ -166,16 +186,20 @@ export default function TherapistWorkspacePage() {
     if (action === "editor") {
       router.push(`/therapist/editor?patientId=${pid}`);
     } else if (action === "reports") {
-      router.push(`/report?patientId=${pid}`);
+      router.push(`/therapist/patients/${pid}/reports`);
     } else if (action === "messages") {
       router.push(`/messages?patientId=${pid}`);
     }
   };
 
-  const handleAdmitConsult = (id: string) => {
-    setConsultations((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, status: "admitted" as const } : c))
-    );
+  const handleAdmitConsult = async (id: string) => {
+    await acceptConsultationRequest(id);
+    loadConsultations();
+  };
+
+  const handleDeclineConsult = (id: string) => {
+    declineConsultationRequest(id);
+    loadConsultations();
   };
 
   const activeSelectedPatient = caseloadPatients.find((p) => p.id === selectedPatientId);
@@ -504,7 +528,7 @@ export default function TherapistWorkspacePage() {
                       </Link>
 
                       <Link
-                        href={`/report?patientId=${patient.id}`}
+                        href={`/therapist/patients/${patient.id}/reports`}
                         className="py-2 px-2.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-center transition-all flex items-center justify-center gap-1 text-[11px]"
                       >
                         <span>📊</span>
@@ -523,59 +547,108 @@ export default function TherapistWorkspacePage() {
         {/* ========================================================= */}
         {workspaceTab === "consultations" && (
           <div className="flex flex-col gap-4">
-            {consultations.map((c) => (
-              <div
-                key={c.id}
-                className="bg-white rounded-2xl border border-slate-200 p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xs"
-              >
-                <div className="flex items-start gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-200 text-indigo-700 font-bold text-base flex items-center justify-center">
-                    {c.patientName.split(" ").map((n) => n[0]).join("")}
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h2 className="text-base font-bold text-slate-900">{c.patientName}</h2>
-                      <span className="text-xs text-slate-400">({c.age} yrs)</span>
-                      <span
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                          c.status === "admitted"
-                            ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-                            : "bg-amber-50 text-amber-800 border-amber-200"
-                        }`}
-                      >
-                        {c.status === "admitted" ? "Admitted to Caseload" : "Pending Intake"}
+            {consultations.length === 0 ? (
+              <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-slate-500">
+                <span className="text-3xl block mb-2">📋</span>
+                <h3 className="font-bold text-slate-900 mb-1">No consultation requests</h3>
+                <p className="text-xs text-slate-400">
+                  You currently have no pending consultation requests directed to your clinical profile.
+                </p>
+              </div>
+            ) : (
+              consultations.map((c) => (
+                <div
+                  key={c.id}
+                  className="bg-white rounded-2xl border border-slate-200 p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xs"
+                >
+                  <div className="flex items-start gap-4">
+                    <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-200 text-indigo-700 font-bold text-base flex items-center justify-center shrink-0">
+                      {c.patientName
+                        .replace(/^Dr\.\s+/i, "")
+                        .split(" ")
+                        .map((n) => n[0])
+                        .join("")
+                        .slice(0, 2)}
+                    </div>
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h2 className="text-base font-bold text-slate-900">{c.patientName}</h2>
+                        {c.aboutPatient && (
+                          <span className="text-xs text-slate-400">({c.aboutPatient})</span>
+                        )}
+                        <span
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                            c.status === "admitted"
+                              ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                              : c.status === "declined"
+                              ? "bg-rose-50 text-rose-800 border-rose-200"
+                              : "bg-amber-50 text-amber-800 border-amber-200"
+                          }`}
+                        >
+                          {c.status === "admitted"
+                            ? "Admitted to Caseload"
+                            : c.status === "declined"
+                            ? "Declined"
+                            : "Pending Intake"}
+                        </span>
+                      </div>
+                      <span className="text-xs font-semibold text-indigo-900 block mt-0.5">
+                        {c.concern}
+                      </span>
+                      {c.affectedSide && (
+                        <span className="inline-block mt-1 text-[11px] font-medium text-slate-600 bg-slate-100 px-2 py-0.2 rounded">
+                          Target Area: {c.affectedSide}
+                        </span>
+                      )}
+                      {c.additionalNote && (
+                        <p className="text-xs text-slate-600 mt-1 max-w-xl leading-relaxed italic bg-slate-50 p-2 rounded-lg border border-slate-200/60">
+                          &quot;{c.additionalNote}&quot;
+                        </p>
+                      )}
+                      <span className="text-[10px] text-slate-400 block mt-1">
+                        Received {c.submittedDateFormatted}
                       </span>
                     </div>
-                    <span className="text-xs font-semibold text-indigo-900 block mt-0.5">
-                      {c.condition}
-                    </span>
-                    <p className="text-xs text-slate-600 mt-1 max-w-xl leading-relaxed">
-                      {c.clinicalSummary}
-                    </p>
-                    <span className="text-[10px] text-slate-400 block mt-1">
-                      Referred by {c.referralSource} • Received {c.requestedDate}
-                    </span>
+                  </div>
+
+                  <div className="flex sm:flex-col items-center sm:items-end gap-2 w-full sm:w-auto">
+                    {c.status === "pending" ? (
+                      <div className="flex items-center gap-2 w-full sm:w-auto">
+                        <button
+                          type="button"
+                          onClick={() => handleDeclineConsult(c.id)}
+                          className="py-2 px-3 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-800 font-bold text-xs transition-all cursor-pointer w-full sm:w-auto text-center"
+                        >
+                          Decline
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleAdmitConsult(c.id)}
+                          className="py-2 px-4 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs shadow-xs transition-all cursor-pointer w-full sm:w-auto text-center"
+                        >
+                          Accept Consultation
+                        </button>
+                      </div>
+                    ) : c.status === "admitted" ? (
+                      <div className="flex flex-col items-end gap-1.5 w-full sm:w-auto">
+                        <span className="text-xs font-bold text-emerald-700 flex items-center gap-1">
+                          <span>✓</span>
+                          <span>Case Active</span>
+                        </span>
+                        <Link
+                          href={`/messages?patientId=${c.patientId}`}
+                          className="text-xs font-semibold text-teal-800 underline hover:text-teal-900"
+                        >
+                          Open conversation &rarr;
+                        </Link>
+                      </div>
+                    ) : (
+                      <span className="text-xs font-semibold text-slate-400">Declined</span>
+                    )}
                   </div>
                 </div>
-
-                <div className="flex sm:flex-col items-center sm:items-end gap-2 w-full sm:w-auto">
-                  {c.status === "pending" ? (
-                    <button
-                      type="button"
-                      onClick={() => handleAdmitConsult(c.id)}
-                      className="py-2 px-4 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs shadow-xs transition-all cursor-pointer w-full sm:w-auto text-center"
-                    >
-                      Admit to Caseload
-                    </button>
-                  ) : (
-                    <span className="text-xs font-bold text-emerald-700 flex items-center gap-1">
-                      <span>✓</span>
-                      <span>Case Active</span>
-                    </span>
-                  )}
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         )}
       </main>

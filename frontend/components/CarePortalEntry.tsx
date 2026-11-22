@@ -102,8 +102,22 @@ export default function CarePortalEntry({ initialTab = "patient" }: CarePortalEn
     setMismatchNotice(null);
   };
 
+  const handleFillUnlinkedPatientDemo = () => {
+    setEmail("patient.karan@athletemind.health");
+    setPassword("athlete123");
+    setError(null);
+    setMismatchNotice(null);
+  };
+
   const handleFillTherapistDemo = () => {
     setEmail("therapist.meera@athletemind.health");
+    setPassword("therapist123");
+    setError(null);
+    setMismatchNotice(null);
+  };
+
+  const handleFillMarcusDemo = () => {
+    setEmail("dr.marcus@athletemind.health");
     setPassword("therapist123");
     setError(null);
     setMismatchNotice(null);
@@ -346,17 +360,32 @@ export default function CarePortalEntry({ initialTab = "patient" }: CarePortalEn
             </button>
 
             {/* Quick Demo Pre-fill Shortcut */}
-            <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-              <span>{isPatient ? "Demo Patient:" : "Demo Clinician:"}</span>
-              <button
-                type="button"
-                onClick={isPatient ? handleFillPatientDemo : handleFillTherapistDemo}
-                className={`text-xs font-semibold underline cursor-pointer transition-colors ${
-                  isPatient ? "text-teal-700 hover:text-teal-900" : "text-emerald-700 hover:text-emerald-900"
-                }`}
-              >
-                {isPatient ? "Fill Aanya Rao demo credentials" : "Fill Dr. Meera Joshi, PT credentials"}
-              </button>
+            <div className="pt-2 border-t border-slate-100 flex flex-col gap-1.5 text-xs text-slate-500">
+              <div className="flex items-center justify-between">
+                <span>{isPatient ? "Linked Demo Patient:" : "Demo Clinician 1:"}</span>
+                <button
+                  type="button"
+                  onClick={isPatient ? handleFillPatientDemo : handleFillTherapistDemo}
+                  className={`text-xs font-semibold underline cursor-pointer transition-colors ${
+                    isPatient ? "text-teal-700 hover:text-teal-900" : "text-emerald-700 hover:text-emerald-900"
+                  }`}
+                >
+                  {isPatient ? "Fill Aanya Rao (Active Plan)" : "Fill Dr. Meera Joshi, PT"}
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span>{isPatient ? "Unlinked Demo Patient:" : "Demo Clinician 2:"}</span>
+                <button
+                  type="button"
+                  onClick={isPatient ? handleFillUnlinkedPatientDemo : handleFillMarcusDemo}
+                  className={`text-xs font-semibold underline cursor-pointer transition-colors ${
+                    isPatient ? "text-teal-700 hover:text-teal-900" : "text-emerald-700 hover:text-emerald-900"
+                  }`}
+                >
+                  {isPatient ? "Fill Karan Sharma (Unlinked)" : "Fill Dr. Marcus Vance, PT"}
+                </button>
+              </div>
             </div>
           </form>
 

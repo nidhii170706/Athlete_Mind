@@ -39,9 +39,12 @@ function SharedSessionReportContent() {
       } else if (user.role === "physiotherapist" && !user.isVerified) {
         // Unverified practitioners cannot inspect clinical reports
         router.push("/therapist/workspace");
+      } else if (user.role === "physiotherapist" && !sessionId && patientId) {
+        // Redirect therapist without specific session to daily exercise reports
+        router.push(`/therapist/patients/${patientId}/reports`);
       }
     }
-  }, [isMounted, isLoading, user, router]);
+  }, [isMounted, isLoading, user, sessionId, patientId, router]);
 
   const handleSignOut = async () => {
     await signOut();
@@ -70,8 +73,16 @@ function SharedSessionReportContent() {
   }
 
   const isTherapist = user.role === "physiotherapist";
-  const backHref = isTherapist ? "/therapist/workspace" : "/today";
-  const backLabel = isTherapist ? "Back to Caseload" : "Back to Today";
+  const backHref = isTherapist
+    ? patientId
+      ? `/therapist/patients/${patientId}/reports?date=${report.dateStr || "2026-11-24"}`
+      : "/therapist/workspace"
+    : "/today";
+  const backLabel = isTherapist
+    ? patientId
+      ? "Back to Daily Reports"
+      : "Back to Caseload"
+    : "Back to Today";
 
   return (
     <div className="min-h-screen bg-[#faf9f5] text-slate-800 font-sans flex flex-col antialiased">

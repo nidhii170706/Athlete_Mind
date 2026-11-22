@@ -1910,6 +1910,8 @@ export default function AthleteMindPage() {
     overall: 0.93,
   });
   const [distanceStatus, setDistanceStatus] = useState<"OPTIMAL" | "TOO_CLOSE" | "TOO_FAR" | "SEARCHING">("SEARCHING");
+  const [positioningCue, setPositioningCue] = useState<string>("Step into frame");
+  const [positioningStatus, setPositioningStatus] = useState<"OPTIMAL" | "NEEDS_ANKLES" | "TOO_CLOSE" | "OFF_CENTER" | "SEARCHING">("SEARCHING");
 
   // DOM References
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -3188,6 +3190,31 @@ export default function AthleteMindPage() {
     const width = canvas.width;
     const height = canvas.height;
 
+    // Preserve native video aspect ratio with centered contain-style fitting & letterbox offsets
+    const vW = video && video.videoWidth > 0 ? video.videoWidth : width;
+    const vH = video && video.videoHeight > 0 ? video.videoHeight : height;
+    const videoAspect = vW / vH;
+    const canvasAspect = width / height;
+
+    let drawW = width;
+    let drawH = height;
+    let offsetX = 0;
+    let offsetY = 0;
+
+    if (Math.abs(canvasAspect - videoAspect) > 0.01) {
+      if (canvasAspect > videoAspect) {
+        drawH = height;
+        drawW = height * videoAspect;
+        offsetX = (width - drawW) / 2;
+        offsetY = 0;
+      } else {
+        drawW = width;
+        drawH = width / videoAspect;
+        offsetX = 0;
+        offsetY = (height - drawH) / 2;
+      }
+    }
+
     // Track FPS
     const nowTs = performance.now();
     if (lastFrameTimeRef.current > 0) {
@@ -3220,11 +3247,15 @@ export default function AthleteMindPage() {
           overall: overallV,
         });
 
-        if (hipsV > 0.35 && anklesV > 0.3) {
-          const topY = Math.min(lm[11]?.y || 0.2, lm[12]?.y || 0.2);
-          const bottomY = Math.max(lm[27]?.y || 0.8, lm[28]?.y || 0.8);
-          const span = bottomY - topY;
+        const currentExerciseConfig = EXERCISE_REGISTRY[activeExerciseRef.current] || EXERCISE_REGISTRY["squats"];
+        const isUpperBodyOnly = currentExerciseConfig.targetRegion === "UPPER_BODY";
 
+        const topY = Math.min(lm[0]?.y ?? 0.2, lm[11]?.y || 0.2, lm[12]?.y || 0.2);
+        const bottomY = Math.max(lm[27]?.y || 0.8, lm[28]?.y || 0.8);
+        const span = bottomY - topY;
+        const hipMidX = ((lm[23]?.x || 0.5) + (lm[24]?.x || 0.5)) / 2;
+
+        if (hipsV > 0.35 && (isUpperBodyOnly || anklesV > 0.3)) {
           if (span >= 0.35 && span <= 0.78) {
             setDistanceStatus("OPTIMAL");
           } else if (span > 0.78 || bottomY > 0.97) {
@@ -3235,14 +3266,43 @@ export default function AthleteMindPage() {
         } else {
           setDistanceStatus("SEARCHING");
         }
+
+        // Actionable Positioning Guidance
+        if (hipsV < 0.25 && shouldersV < 0.25) {
+          setPositioningCue("Step into frame");
+          setPositioningStatus("SEARCHING");
+        } else if (!isUpperBodyOnly && (anklesV < 0.35 || bottomY > 0.95)) {
+          setPositioningCue("Move back so your ankles are visible");
+          setPositioningStatus("NEEDS_ANKLES");
+        } else if (topY < 0.04) {
+          setPositioningCue("Step back — head near edge of frame");
+          setPositioningStatus("TOO_CLOSE");
+        } else if (hipMidX < 0.28) {
+          setPositioningCue("Centre your body");
+          setPositioningStatus("OFF_CENTER");
+        } else if (hipMidX > 0.72) {
+          setPositioningCue("Centre your body");
+          setPositioningStatus("OFF_CENTER");
+        } else if (!isUpperBodyOnly && span > 0.88) {
+          setPositioningCue("Step back for full body view");
+          setPositioningStatus("TOO_CLOSE");
+        } else if (shouldersV >= 0.4 && hipsV >= 0.4 && (isUpperBodyOnly || (anklesV >= 0.35 && kneesV >= 0.4))) {
+          setPositioningCue("Full body detected");
+          setPositioningStatus("OPTIMAL");
+        } else {
+          setPositioningCue("Adjust position for clear sensor tracking");
+          setPositioningStatus("SEARCHING");
+        }
       } else {
         setDistanceStatus("SEARCHING");
+        setPositioningCue("Step into frame");
+        setPositioningStatus("SEARCHING");
       }
     }
 
     ctx.clearRect(0, 0, width, height);
 
-    // 1. Mirrored Camera Video with Screen Shake
+    // 1. Mirrored Camera Video with Screen Shake and exact contain offsets
     if (video && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
       ctx.save();
       if (screenShakeRef.current > 0) {
@@ -3255,7 +3315,7 @@ export default function AthleteMindPage() {
       }
       ctx.translate(width, 0);
       ctx.scale(-1, 1);
-      ctx.drawImage(video, 0, 0, width, height);
+      ctx.drawImage(video, width - offsetX - drawW, offsetY, drawW, drawH);
       ctx.restore();
 
       const grad = ctx.createRadialGradient(width / 2, height / 2, width * 0.35, width / 2, height / 2, width * 0.75);
@@ -3306,15 +3366,15 @@ export default function AthleteMindPage() {
     ctx.lineTo(width - 14, height - 14 - bSize);
     ctx.stroke();
 
-    // 3. Dynamic Color-Coded Kinematic Skeleton
+    // 3. Dynamic Color-Coded Kinematic Skeleton with exact contain offsets and mirroring
     const landmarks = landmarksRef.current;
     if (landmarks && Array.isArray(landmarks) && landmarks.length >= 29) {
       const getPt = (idx: number) => {
         const pt = landmarks[idx];
         if (!pt || pt.visibility < 0.35) return null;
         return {
-          x: (1.0 - pt.x) * width,
-          y: pt.y * height,
+          x: offsetX + (1.0 - pt.x) * drawW,
+          y: offsetY + pt.y * drawH,
           idx,
         };
       };
@@ -5044,6 +5104,8 @@ export default function AthleteMindPage() {
           fps={currentFps}
           jointVisibility={jointVisibility}
           distanceStatus={distanceStatus}
+          positioningInstruction={positioningCue}
+          isFullBodyDetected={positioningStatus === "OPTIMAL"}
           onBack={() => setActiveView("MAIN_MENU")}
           onLaunchArena={() => setActiveView("ARENA")}
         />
@@ -5250,7 +5312,7 @@ export default function AthleteMindPage() {
       {/* ------------------------------------------------------------------- */}
       {/* 2. MAIN ARENA VIEWPORT (FUTURISTIC COCKPIT FRAME & ROCKET BLUEPRINT) */}
       {/* ------------------------------------------------------------------- */}
-      <main className="relative flex-1 w-full h-[calc(100vh-3.5rem)] flex items-center justify-center p-0 bg-[#050811] overflow-hidden">
+      <main className="relative flex-1 w-full min-h-0 flex flex-col p-2 sm:p-2.5 bg-[#050811] overflow-hidden">
         <FuturisticCockpitFrame
           currentAngle={primaryAngle}
           targetAngle={
@@ -5270,7 +5332,7 @@ export default function AthleteMindPage() {
             flexibilityToleranceRef.current = pct;
             synth.playCalibrationBeep(false);
           }}
-          className={`h-[92vh] max-h-[92vh] max-w-full aspect-[4/3] md:aspect-[16/9] mx-auto shadow-2xl transition-all duration-500 ${
+          className={`w-full h-full flex-1 min-h-0 min-w-0 mx-auto shadow-2xl transition-all duration-500 ${
             isEnraged
               ? "border-rose-500/80 shadow-[0_0_60px_rgba(244,63,94,0.4)]"
               : "border-cyan-500/30 shadow-[0_0_50px_rgba(0,240,255,0.12)]"
@@ -5280,7 +5342,7 @@ export default function AthleteMindPage() {
             ref={canvasRef}
             width={1280}
             height={720}
-            className="w-full h-full object-cover"
+            className="w-full h-full object-contain"
           />
 
           {/* Red Glitch Direct Hit Damage Overlay */}
@@ -5288,8 +5350,28 @@ export default function AthleteMindPage() {
             <div className="absolute inset-0 z-35 bg-rose-600/35 pointer-events-none mix-blend-screen animate-pulse backdrop-invert" />
           )}
 
+          {/* Subtle Full-Body Positioning Guidance Badge */}
+          {positioningCue && (gameStage === "PROLOGUE" || gameStage.startsWith("CALIBRATION_")) && (
+            <div className="absolute top-3 left-1/2 -translate-x-1/2 z-25 pointer-events-none transition-all duration-300">
+              <div
+                className={`px-3 py-1 rounded-full border text-[10px] sm:text-[11px] font-bold tracking-wider backdrop-blur-md flex items-center gap-1.5 shadow-lg text-center whitespace-nowrap ${
+                  positioningStatus === "OPTIMAL"
+                    ? "bg-emerald-950/85 border-emerald-400/70 text-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.4)]"
+                    : positioningStatus === "NEEDS_ANKLES" || positioningStatus === "TOO_CLOSE"
+                    ? "bg-rose-950/90 border-rose-500/80 text-rose-300 shadow-[0_0_15px_rgba(244,63,94,0.5)] animate-pulse"
+                    : positioningStatus === "OFF_CENTER"
+                    ? "bg-amber-950/90 border-amber-400/80 text-amber-300 shadow-[0_0_15px_rgba(245,158,11,0.4)]"
+                    : "bg-slate-950/85 border-cyan-500/50 text-cyan-300"
+                }`}
+              >
+                <span>{positioningStatus === "OPTIMAL" ? "✅" : "⚠️"}</span>
+                <span>{positioningCue}</span>
+              </div>
+            </div>
+          )}
+
           {/* Left Lateral HUD: Rocket Blueprint Schematic & Combat Metrics */}
-          <div className="absolute top-3 left-3 z-25 flex flex-col gap-2 pointer-events-auto max-w-[190px] sm:max-w-[210px]">
+          <div className="absolute top-3 left-3 z-25 flex flex-col gap-1.5 sm:gap-2 pointer-events-auto max-w-[150px] sm:max-w-[180px] lg:max-w-[210px]">
             <RocketBlueprintHUD
               playerHp={playerHp}
               playerMaxHp={100}
@@ -5298,19 +5380,20 @@ export default function AthleteMindPage() {
               isBreached={(shieldBreachFlashRef.current > performance.now()) || screenGlitch}
               isExploding={isShipExploding}
               repCycleStatus={repCycleStatus}
+              exerciseName={(EXERCISE_REGISTRY[activeExerciseRef.current] || EXERCISE_REGISTRY["squats"]).name}
             />
 
             {/* Quick Tactical Metrics: REPS & STREAK */}
-            <div className="grid grid-cols-2 gap-1.5 w-full">
-              <div className="bg-slate-950/85 backdrop-blur-md border border-cyan-500/40 rounded-xl p-2 flex flex-col items-center justify-center text-center shadow-lg">
-                <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">REPS</span>
-                <span className="text-3xl font-black text-cyan-400 font-mono leading-none mt-0.5">
+            <div className="grid grid-cols-2 gap-1 sm:gap-1.5 w-full">
+              <div className="bg-slate-950/85 backdrop-blur-md border border-cyan-500/40 rounded-xl p-1.5 sm:p-2 flex flex-col items-center justify-center text-center shadow-lg">
+                <span className="text-[8px] sm:text-[9px] text-slate-400 font-bold uppercase tracking-wider">REPS</span>
+                <span className="text-xl sm:text-2xl lg:text-3xl font-black text-cyan-400 font-mono leading-none mt-0.5">
                   {repCount.toString().padStart(2, "0")}
                 </span>
               </div>
-              <div className="bg-slate-950/85 backdrop-blur-md border border-amber-500/40 rounded-xl p-2 flex flex-col items-center justify-center text-center shadow-lg">
-                <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">STREAK</span>
-                <span className="text-2xl font-black text-amber-400 font-mono leading-none mt-0.5 flex items-center justify-center gap-1">
+              <div className="bg-slate-950/85 backdrop-blur-md border border-amber-500/40 rounded-xl p-1.5 sm:p-2 flex flex-col items-center justify-center text-center shadow-lg">
+                <span className="text-[8px] sm:text-[9px] text-slate-400 font-bold uppercase tracking-wider">STREAK</span>
+                <span className="text-lg sm:text-xl lg:text-2xl font-black text-amber-400 font-mono leading-none mt-0.5 flex items-center justify-center gap-0.5 sm:gap-1">
                   <span>🔥</span>
                   <span>{comboStreak > 0 ? `${comboStreak}x` : "1x"}</span>
                 </span>
@@ -5319,28 +5402,28 @@ export default function AthleteMindPage() {
           </div>
 
           {/* Right Lateral HUD (Deflections, Boss HP, Strike Alert, Restart) */}
-          <div className="absolute top-4 right-4 z-20 w-52 flex flex-col gap-3 text-right items-end pointer-events-auto">
+          <div className="absolute top-3 right-3 z-20 w-36 sm:w-44 lg:w-52 flex flex-col gap-1.5 sm:gap-2.5 text-right items-end pointer-events-auto">
             {/* DEFLECTED */}
-            <div className="w-full bg-slate-950/70 backdrop-blur-md border border-slate-800/80 rounded-2xl p-4 shadow-xl flex flex-col items-end">
-              <div className="text-xs text-slate-400 font-bold uppercase mb-1">DEFLECTED</div>
-              <div className="text-4xl font-black text-cyan-400 font-mono tracking-tight flex items-center gap-2">
-                <span className="text-2xl">🛡️</span>
+            <div className="w-full bg-slate-950/70 backdrop-blur-md border border-slate-800/80 rounded-xl sm:rounded-2xl p-2 sm:p-3 lg:p-4 shadow-xl flex flex-col items-end">
+              <div className="text-[9px] sm:text-xs text-slate-400 font-bold uppercase mb-0.5 sm:mb-1">DEFLECTED</div>
+              <div className="text-2xl sm:text-3xl lg:text-4xl font-black text-cyan-400 font-mono tracking-tight flex items-center gap-1.5 sm:gap-2">
+                <span className="text-lg sm:text-2xl">🛡️</span>
                 <span>{deflectionsCompleted} / {deflectionsTarget}</span>
               </div>
             </div>
 
             {/* BOSS / ANOMALY HP */}
-            <div className="w-full bg-slate-950/70 backdrop-blur-md border border-slate-800/80 rounded-2xl p-4 shadow-xl flex flex-col items-end">
-              <div className="text-xs text-slate-400 font-bold uppercase mb-1 flex items-center gap-1">
+            <div className="w-full bg-slate-950/70 backdrop-blur-md border border-slate-800/80 rounded-xl sm:rounded-2xl p-2 sm:p-3 lg:p-4 shadow-xl flex flex-col items-end">
+              <div className="text-[9px] sm:text-xs text-slate-400 font-bold uppercase mb-0.5 sm:mb-1 flex items-center gap-1">
                 {isEnraged && <span className="text-amber-400 animate-ping">⚡</span>}
                 <span className={isEnraged ? "text-rose-400 font-black" : "text-slate-400"}>
                   {isEnraged ? "OVERCLOCKED" : "COLOSSUS HP"}
                 </span>
               </div>
-              <div className="text-3xl font-black text-red-400 font-mono tracking-tight">
+              <div className="text-xl sm:text-2xl lg:text-3xl font-black text-red-400 font-mono tracking-tight">
                 {bossHp} / {bossMaxHp}
               </div>
-              <div className="h-2 w-full bg-slate-900 rounded-full overflow-hidden p-0.5 border border-red-500/40 mt-2">
+              <div className="h-1.5 sm:h-2 w-full bg-slate-900 rounded-full overflow-hidden p-0.5 border border-red-500/40 mt-1 sm:mt-2">
                 <div
                   className={`h-full rounded-full transition-all duration-300 ${
                     isEnraged
@@ -5353,16 +5436,16 @@ export default function AthleteMindPage() {
             </div>
 
             {/* STRIKE / PARRY ALERT */}
-            <div className={`w-full bg-slate-950/70 backdrop-blur-md border rounded-2xl p-4 shadow-xl flex flex-col items-end transition-all ${
+            <div className={`w-full bg-slate-950/70 backdrop-blur-md border rounded-xl sm:rounded-2xl p-2 sm:p-3 lg:p-4 shadow-xl flex flex-col items-end transition-all ${
               incomingAttack
                 ? "border-rose-500/80 shadow-[0_0_20px_rgba(244,63,94,0.5)] animate-pulse"
                 : "border-slate-800/80"
             }`}>
-              <div className="text-xs text-slate-400 font-bold uppercase mb-1">
+              <div className="text-[9px] sm:text-xs text-slate-400 font-bold uppercase mb-0.5 sm:mb-1">
                 {incomingAttack ? "PARRY ALERT" : "STRIKE IN"}
               </div>
               <div
-                className={`text-3xl font-black font-mono tracking-tight ${
+                className={`text-xl sm:text-2xl lg:text-3xl font-black font-mono tracking-tight ${
                   incomingAttack
                     ? "text-rose-400 animate-bounce"
                     : bossAttackTimer <= 3.0

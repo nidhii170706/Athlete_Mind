@@ -63,6 +63,8 @@ export interface TrackingInterruption {
 
 export interface SessionReport {
   id: string;
+  dateStr?: string;
+  patientId?: string;
   sessionDate: string;
   sessionTitle: string;
   prescriptionSnapshot: ExerciseItem;
@@ -237,8 +239,10 @@ export const SEED_WEEKLY_SCHEDULE: DayScheduleItem[] = [
 
 export const SEED_SESSION_REPORT: SessionReport = {
   id: "rep_monday_nov24",
+  dateStr: "2026-11-24",
+  patientId: "patient_aanya_rao",
   sessionDate: "Nov 24",
-  sessionTitle: "Monday Session Report • Nov 24",
+  sessionTitle: "Tuesday Session Report • Nov 24",
   prescriptionSnapshot: SEED_PUBLISHED_PLAN.exercises[0],
   planVersion: 1,
   plannedMovements: 5,
@@ -300,8 +304,41 @@ export const SEED_SESSION_REPORT: SessionReport = {
   syncStatus: "synced",
 };
 
+export const SEED_AANYA_COMPLETED_REPORT: SessionReport = {
+  id: "rep_aanya_mon_nov23",
+  dateStr: "2026-11-23",
+  patientId: "patient_aanya_rao",
+  sessionDate: "Nov 23",
+  sessionTitle: "Monday Session Report • Nov 23",
+  prescriptionSnapshot: SEED_PUBLISHED_PLAN.exercises[0],
+  planVersion: 1,
+  plannedMovements: 5,
+  performedMovements: 5,
+  metTargetAndHold: 5,
+  earlyReleases: 0,
+  trackingPauses: 0,
+  observedMinDeg: 37,
+  observedMaxDeg: 44,
+  narrativeHeadline:
+    "You completed all five planned movements. All five met your target range and hold duration.",
+  narrativeSubtext:
+    "Five successful deflections recorded in Aegis Run. Stable knee kinematics throughout all reps.",
+  movements: [
+    { movementNum: 1, observedPeakDeg: 40, holdDurationSec: 1.0, outcome: "met_target", gameEvent: "Successful deflection" },
+    { movementNum: 2, observedPeakDeg: 42, holdDurationSec: 1.0, outcome: "met_target", gameEvent: "Successful deflection" },
+    { movementNum: 3, observedPeakDeg: 39, holdDurationSec: 1.0, outcome: "met_target", gameEvent: "Successful deflection" },
+    { movementNum: 4, observedPeakDeg: 41, holdDurationSec: 1.0, outcome: "met_target", gameEvent: "Successful deflection" },
+    { movementNum: 5, observedPeakDeg: 43, holdDurationSec: 1.0, outcome: "met_target", gameEvent: "Successful deflection" },
+  ],
+  interruptions: [],
+  patientNote: "Felt very smooth and controlled.",
+  syncStatus: "synced",
+};
+
 export const SEED_BASELINE_REPORT: SessionReport = {
   id: "rep_baseline_nov17",
+  dateStr: "2026-11-17",
+  patientId: "patient_aanya_rao",
   sessionDate: "Nov 17",
   sessionTitle: "Initial Calibration Session • Nov 17",
   prescriptionSnapshot: {
@@ -366,8 +403,76 @@ export const SEED_BASELINE_REPORT: SessionReport = {
 
 export const INITIAL_SEED_REPORTS: SessionReport[] = [
   SEED_SESSION_REPORT,
+  SEED_AANYA_COMPLETED_REPORT,
   SEED_BASELINE_REPORT,
 ];
+
+// ---------------------------------------------------------------------------
+// Dev Patel Seed Plan & Session Reports
+// ---------------------------------------------------------------------------
+export const SEED_DEV_PATEL_PLAN: CarePlan = {
+  id: "plan_dev_week1",
+  patientId: "sample_dev_patel",
+  patientName: "Dev Patel",
+  clinicianName: "Dr. Meera Joshi, PT",
+  clinicianTitle: "Verified clinician",
+  planTitle: "Post-Meniscectomy Knee Rehab",
+  scheduleDesc: "Tue - Thu - Sat schedule • Nov 24 - Dec 19 • English",
+  status: "published",
+  version: 1,
+  updatedAt: "2026-11-22T05:00:00.000Z",
+  activeExerciseId: "terminal_knee_extension",
+  exercises: [
+    {
+      id: "terminal_knee_extension",
+      name: "Controlled Terminal Knee Extension",
+      targetRegion: "LOWER_BODY",
+      affectedSide: "left",
+      observedSide: "left",
+      targetMinFlexionDeg: 10,
+      targetMaxFlexionDeg: 25,
+      holdDurationSec: 2.0,
+      sets: 1,
+      reps: 6,
+      restSec: 30,
+      instructions:
+        "Extend the knee against light resistance into the 10–25° terminal arc, hold steady for 2 seconds, then control the descent.",
+      cameraSetupNote: "Sagittal side-view of left knee required.",
+    },
+  ],
+};
+
+export const SEED_DEV_SESSION_REPORT: SessionReport = {
+  id: "rep_dev_nov24",
+  dateStr: "2026-11-24",
+  patientId: "sample_dev_patel",
+  sessionDate: "Nov 24",
+  sessionTitle: "Tuesday Session Report • Nov 24",
+  prescriptionSnapshot: SEED_DEV_PATEL_PLAN.exercises[0],
+  planVersion: 1,
+  plannedMovements: 6,
+  performedMovements: 6,
+  metTargetAndHold: 6,
+  earlyReleases: 0,
+  trackingPauses: 0,
+  observedMinDeg: 12,
+  observedMaxDeg: 24,
+  narrativeHeadline:
+    "You completed all six planned movements. All six met your range and hold target.",
+  narrativeSubtext:
+    "Flawless biomechanical execution in terminal extension. Six clean deflections recorded.",
+  movements: [
+    { movementNum: 1, observedPeakDeg: 22, holdDurationSec: 2.0, outcome: "met_target", gameEvent: "Clean extension" },
+    { movementNum: 2, observedPeakDeg: 20, holdDurationSec: 2.0, outcome: "met_target", gameEvent: "Clean extension" },
+    { movementNum: 3, observedPeakDeg: 24, holdDurationSec: 2.0, outcome: "met_target", gameEvent: "Clean extension" },
+    { movementNum: 4, observedPeakDeg: 19, holdDurationSec: 2.0, outcome: "met_target", gameEvent: "Clean extension" },
+    { movementNum: 5, observedPeakDeg: 23, holdDurationSec: 2.0, outcome: "met_target", gameEvent: "Clean extension" },
+    { movementNum: 6, observedPeakDeg: 21, holdDurationSec: 2.0, outcome: "met_target", gameEvent: "Clean extension" },
+  ],
+  interruptions: [],
+  patientNote: "Felt strong quad activation with no joint effusion.",
+  syncStatus: "synced",
+};
 
 // ---------------------------------------------------------------------------
 // Local Persistence API (Scoped by patient ID for multi-clinician local demo)
@@ -388,7 +493,10 @@ export function cloneCarePlan(plan: CarePlan): CarePlan {
 }
 
 export function getPublishedPlan(patientId?: string): CarePlan {
-  if (typeof window === "undefined") return cloneCarePlan(SEED_PUBLISHED_PLAN);
+  if (typeof window === "undefined") {
+    if (patientId === "sample_dev_patel") return cloneCarePlan(SEED_DEV_PATEL_PLAN);
+    return cloneCarePlan(SEED_PUBLISHED_PLAN);
+  }
   const pid = patientId || "patient_aanya_rao";
   const scopedKey = `${STORAGE_KEY_PUBLISHED}_${pid}`;
 
@@ -403,6 +511,10 @@ export function getPublishedPlan(patientId?: string): CarePlan {
     }
   } catch (e) {
     console.warn("Failed reading published plan from storage", e);
+  }
+
+  if (pid === "sample_dev_patel") {
+    return cloneCarePlan(SEED_DEV_PATEL_PLAN);
   }
 
   const initial = cloneCarePlan({ ...SEED_PUBLISHED_PLAN, patientId: pid });
@@ -485,8 +597,11 @@ export function saveDraftPlan(plan: CarePlan, patientId?: string): void {
 }
 
 export function getAllSessionReports(patientId?: string): SessionReport[] {
-  if (typeof window === "undefined") return INITIAL_SEED_REPORTS;
   const pid = patientId || "patient_aanya_rao";
+  if (typeof window === "undefined") {
+    if (pid === "sample_dev_patel") return [SEED_DEV_SESSION_REPORT];
+    return INITIAL_SEED_REPORTS;
+  }
   const listKey = `athletemind_session_reports_list_${pid}`;
 
   try {
@@ -499,9 +614,17 @@ export function getAllSessionReports(patientId?: string): SessionReport[] {
     console.warn("Failed reading reports list", e);
   }
 
+  // Fallback to patient-specific initial seeds
+  if (pid === "sample_dev_patel") {
+    return [SEED_DEV_SESSION_REPORT];
+  }
+
   // Fallback to latest single report plus baseline
   const latest = getLatestSessionReport(patientId);
   const reports = [latest];
+  if (latest.id !== SEED_AANYA_COMPLETED_REPORT.id) {
+    reports.push(SEED_AANYA_COMPLETED_REPORT);
+  }
   if (latest.id !== SEED_BASELINE_REPORT.id) {
     reports.push(SEED_BASELINE_REPORT);
   }
@@ -514,13 +637,17 @@ export function getSessionReportById(sessionId?: string | null, patientId?: stri
   const found = reports.find((r) => r.id === sessionId);
   if (found) return found;
   if (sessionId === SEED_SESSION_REPORT.id) return SEED_SESSION_REPORT;
+  if (sessionId === SEED_AANYA_COMPLETED_REPORT.id) return SEED_AANYA_COMPLETED_REPORT;
   if (sessionId === SEED_BASELINE_REPORT.id) return SEED_BASELINE_REPORT;
+  if (sessionId === SEED_DEV_SESSION_REPORT.id) return SEED_DEV_SESSION_REPORT;
   return getLatestSessionReport(patientId);
 }
 
 export function getLatestSessionReport(patientId?: string): SessionReport {
-  if (typeof window === "undefined") return SEED_SESSION_REPORT;
   const pid = patientId || "patient_aanya_rao";
+  if (typeof window === "undefined") {
+    return pid === "sample_dev_patel" ? SEED_DEV_SESSION_REPORT : SEED_SESSION_REPORT;
+  }
   const scopedKey = `${STORAGE_KEY_REPORT}_${pid}`;
 
   try {
@@ -534,24 +661,28 @@ export function getLatestSessionReport(patientId?: string): SessionReport {
   } catch (e) {
     console.warn("Failed reading session report", e);
   }
-  return SEED_SESSION_REPORT;
+  return pid === "sample_dev_patel" ? SEED_DEV_SESSION_REPORT : SEED_SESSION_REPORT;
 }
 
 export function saveSessionReport(report: SessionReport, patientId?: string): void {
   if (typeof window === "undefined") return;
-  const pid = patientId || "patient_aanya_rao";
+  const pid = patientId || report.patientId || "patient_aanya_rao";
   const scopedKey = `${STORAGE_KEY_REPORT}_${pid}`;
   const listKey = `athletemind_session_reports_list_${pid}`;
 
   try {
-    const json = JSON.stringify(report);
+    const reportToSave: SessionReport = {
+      ...report,
+      patientId: pid,
+    };
+    const json = JSON.stringify(reportToSave);
     localStorage.setItem(scopedKey, json);
     if (pid === "patient_aanya_rao") {
       localStorage.setItem(STORAGE_KEY_REPORT, json);
     }
     // Update or prepend in reports list
     const currentList = getAllSessionReports(patientId).filter((r) => r.id !== report.id);
-    const updatedList = [report, ...currentList];
+    const updatedList = [reportToSave, ...currentList];
     localStorage.setItem(listKey, JSON.stringify(updatedList));
   } catch (e) {
     console.warn("Failed saving session report", e);
@@ -567,4 +698,165 @@ export function updatePatientNote(note: string, patientId?: string, sessionId?: 
   } catch (e) {
     console.warn("Failed updating patient note", e);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Unified Calendar & Date Utilities
+// Accurate calendar calculations matching actual day of week
+// ---------------------------------------------------------------------------
+
+export function parseDateString(dateStr: string): Date {
+  const parts = dateStr.split("-").map(Number);
+  const y = parts[0];
+  const m = parts[1];
+  const d = parts[2] || 1;
+  return new Date(y, m - 1, d, 12, 0, 0); // midday avoids any timezone/DST shift
+}
+
+export function formatDateToYYYYMMDD(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+export function getWeekdayName(dateStr: string, format: "short" | "long" = "short"): string {
+  const dt = parseDateString(dateStr);
+  return dt.toLocaleDateString("en-US", { weekday: format });
+}
+
+export function formatDetailHeadingDate(dateStr: string): string {
+  const dt = parseDateString(dateStr);
+  const weekday = dt.toLocaleDateString("en-US", { weekday: "long" });
+  const monthDay = dt.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const year = dt.getFullYear();
+  return `${weekday}, ${monthDay}, ${year}`;
+}
+
+export interface WeekDayCardInfo {
+  dateStr: string;
+  dayName: string;
+  dayNumber: number;
+  monthName: string;
+  isToday: boolean;
+  state: "completed" | "partial" | "no_session" | "due_today" | "upcoming" | "rest_day";
+  statusLabel: string;
+  countLabel?: string;
+  sessions: SessionReport[];
+  isRestDay: boolean;
+}
+
+export function getPatientScheduledWeekdays(plan: CarePlan): string[] {
+  const desc = plan.scheduleDesc?.toLowerCase() || "";
+  if (desc.includes("tue") && desc.includes("thu") && desc.includes("sat")) {
+    return ["Tue", "Thu", "Sat"];
+  }
+  // Default Mon-Wed-Fri
+  return ["Mon", "Wed", "Fri"];
+}
+
+export function getWeekDaysForAnchor(
+  anchorDateStr: string,
+  patientPlan: CarePlan,
+  sessions: SessionReport[],
+  todayDateStr: string = "2026-11-24"
+): {
+  weekRangeLabel: string;
+  days: WeekDayCardInfo[];
+} {
+  const dt = parseDateString(anchorDateStr);
+  const dayOfWeek = dt.getDay(); // 0 is Sunday, 1 is Monday ... 6 is Saturday
+  const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+  const monday = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate() + diffToMonday, 12, 0, 0);
+
+  const scheduledWeekdays = getPatientScheduledWeekdays(patientPlan);
+
+  const days: WeekDayCardInfo[] = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i, 12, 0, 0);
+    const dateStr = formatDateToYYYYMMDD(d);
+    const dayName = d.toLocaleDateString("en-US", { weekday: "short" });
+    const dayNumber = d.getDate();
+    const monthName = d.toLocaleDateString("en-US", { month: "short" });
+    const isToday = dateStr === todayDateStr;
+
+    // Check if weekday is in schedule
+    const isScheduled = scheduledWeekdays.includes(dayName);
+    const isRestDay = !isScheduled;
+
+    // Find sessions for this date
+    // Session matches either by dateStr or by sessionDate (e.g. "Nov 24")
+    const dateMonthDay = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    const daySessions = sessions.filter(
+      (s) => s.dateStr === dateStr || s.sessionDate === dateMonthDay || s.sessionDate === `${monthName} ${dayNumber}`
+    );
+
+    // Compute day state
+    let state: WeekDayCardInfo["state"] = "rest_day";
+    let statusLabel = "Rest day";
+    let countLabel: string | undefined = undefined;
+
+    if (daySessions.length > 0) {
+      // We have recorded session(s)
+      let totalPlanned = 0;
+      let totalPerformed = 0;
+      let totalMetTarget = 0;
+      daySessions.forEach((s) => {
+        totalPlanned += s.plannedMovements;
+        totalPerformed += s.performedMovements;
+        totalMetTarget += s.metTargetAndHold;
+      });
+
+      if (isRestDay) {
+        state = "rest_day";
+        statusLabel = "Rest day";
+        countLabel = `Logged · ${totalPerformed} reps`;
+      } else if (totalPerformed >= totalPlanned) {
+        state = "completed";
+        statusLabel = "Completed";
+        countLabel = `${totalPerformed} of ${totalPlanned} reps`;
+      } else {
+        state = "partial";
+        statusLabel = "Partial";
+        countLabel = `${totalPerformed} of ${totalPlanned} reps`;
+      }
+    } else {
+      // No recorded sessions
+      if (isRestDay) {
+        state = "rest_day";
+        statusLabel = "Rest day";
+      } else {
+        // Compare with todayDateStr
+        if (dateStr > todayDateStr) {
+          state = "upcoming";
+          statusLabel = "Upcoming";
+        } else if (dateStr === todayDateStr) {
+          state = "due_today";
+          statusLabel = "Due today";
+        } else {
+          state = "no_session";
+          statusLabel = "No session recorded";
+        }
+      }
+    }
+
+    days.push({
+      dateStr,
+      dayName,
+      dayNumber,
+      monthName,
+      isToday,
+      state,
+      statusLabel,
+      countLabel,
+      sessions: daySessions,
+      isRestDay,
+    });
+  }
+
+  const startDay = days[0];
+  const endDay = days[6];
+  const weekRangeLabel = `${startDay.monthName} ${startDay.dayNumber} – ${endDay.monthName} ${endDay.dayNumber}, ${monday.getFullYear()}`;
+
+  return { weekRangeLabel, days };
 }

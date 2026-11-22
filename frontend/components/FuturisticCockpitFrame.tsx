@@ -41,19 +41,14 @@ export const FuturisticCockpitFrame: React.FC<FuturisticCockpitFrameProps> = ({
 
   return (
     <div
-      className={`relative w-full h-full flex flex-col rounded-3xl overflow-hidden border-2 border-cyan-500/50 bg-[#030712] shadow-[0_0_60px_rgba(0,240,255,0.18)] font-mono select-none ${className}`}
+      className={`relative w-full h-full flex-1 min-h-0 min-w-0 flex flex-col rounded-2xl sm:rounded-3xl overflow-hidden border-2 border-cyan-500/50 bg-[#030712] shadow-[0_0_60px_rgba(0,240,255,0.18)] font-mono select-none ${className}`}
     >
       {/* ------------------------------------------------------------------- */}
       {/* 1. TOP COCKPIT COMMAND BAR & ARTIFICIAL HORIZON GYRO                */}
       {/* ------------------------------------------------------------------- */}
-      <div className="relative z-30 w-full bg-slate-950/90 border-b border-cyan-500/40 px-3 sm:px-4 py-2 flex flex-wrap items-center justify-between text-xs backdrop-blur-md gap-2">
-        {/* Left Sensor Status */}
+      <div className="relative z-30 w-full bg-slate-950/90 border-b border-cyan-500/40 px-3 sm:px-4 py-1.5 sm:py-2 flex flex-wrap items-center justify-between text-xs backdrop-blur-md gap-2">
+        {/* Left Sensor Status & Flexibility Controls */}
         <div className="flex items-center gap-2 sm:gap-3">
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-cyan-950/70 border border-cyan-500/50 text-[10px] text-cyan-300 font-bold">
-            <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping" />
-            <span>SENSOR // 60 FPS</span>
-          </div>
-
           {/* Difficulty / Flexibility Range Tolerance Selector */}
           {onFlexibilityChange && (
             <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-slate-900/90 border border-cyan-500/30">
@@ -80,15 +75,15 @@ export const FuturisticCockpitFrame: React.FC<FuturisticCockpitFrameProps> = ({
 
         {/* Center: Artificial Horizon & Gyroscope Reticle */}
         <div className="hidden sm:flex items-center gap-3">
-          <div className="relative w-28 h-6 flex items-center justify-center overflow-hidden border border-slate-700/60 rounded bg-black/60 px-2">
+          <div className="relative w-24 sm:w-28 h-5 sm:h-6 flex items-center justify-center overflow-hidden border border-slate-700/60 rounded bg-black/60 px-2">
             {/* Horizon pitch line tilting with user torso */}
             <div
-              className="absolute w-20 h-0.5 bg-gradient-to-r from-transparent via-cyan-400 to-transparent transition-transform duration-100"
+              className="absolute w-16 sm:w-20 h-0.5 bg-gradient-to-r from-transparent via-cyan-400 to-transparent transition-transform duration-100"
               style={{ transform: `rotate(${Math.max(-25, Math.min(25, torsoTilt))}deg)` }}
             />
             {/* Center crosshair */}
             <div className="absolute w-2 h-2 rounded-full border border-amber-400/80 pointer-events-none" />
-            <span className="absolute bottom-0.5 text-[8px] text-slate-500 font-bold">
+            <span className="absolute bottom-0.5 text-[7px] sm:text-[8px] text-slate-500 font-bold">
               HORIZON
             </span>
           </div>
@@ -124,30 +119,30 @@ export const FuturisticCockpitFrame: React.FC<FuturisticCockpitFrameProps> = ({
       {/* ------------------------------------------------------------------- */}
       {/* 2. MAIN CENTER COCKPIT DISPLAY WITH SIDE WINGS                      */}
       {/* ------------------------------------------------------------------- */}
-      <div className="relative flex-1 w-full min-h-0 flex overflow-hidden">
+      <div className="relative flex-1 w-full min-h-0 min-w-0 flex overflow-hidden">
         {/* Camera Canvas Viewport */}
         <div className="relative flex-1 w-full h-full flex items-center justify-center bg-black overflow-hidden">
           {children}
 
           {/* CRT Scanline & Phosphor Grid Texture Overlay */}
-          <div className="absolute inset-0 bg-[linear-gradient(rgba(18,24,38,0)_50%,rgba(0,0,0,0.25)_50%)] bg-[length:100%_4px] pointer-events-none z-20 opacity-35" />
+          <div className="absolute inset-0 bg-[linear-gradient(rgba(18,24,38,0)_50%,rgba(0,0,0,0.25)_50%)] bg-[length:100%_4px] pointer-events-none z-20 opacity-30" />
 
           {/* Optical Corner Targeting Brackets */}
-          <div className="absolute top-4 left-4 text-cyan-500/60 text-lg font-mono pointer-events-none z-20">┌</div>
-          <div className="absolute top-4 right-4 text-cyan-500/60 text-lg font-mono pointer-events-none z-20">┐</div>
-          <div className="absolute bottom-4 left-4 text-cyan-500/60 text-lg font-mono pointer-events-none z-20">└</div>
-          <div className="absolute bottom-4 right-4 text-cyan-500/60 text-lg font-mono pointer-events-none z-20">┘</div>
+          <div className="absolute top-3 left-3 text-cyan-500/50 text-base font-mono pointer-events-none z-20">┌</div>
+          <div className="absolute top-3 right-3 text-cyan-500/50 text-base font-mono pointer-events-none z-20">┐</div>
+          <div className="absolute bottom-3 left-3 text-cyan-500/50 text-base font-mono pointer-events-none z-20">└</div>
+          <div className="absolute bottom-3 right-3 text-cyan-500/50 text-base font-mono pointer-events-none z-20">┘</div>
 
           {/* Left Wing Dock (Rocket Blueprint HUD & Core Rep Metrics) */}
           {leftPanel && (
-            <div className="absolute top-4 left-4 z-25 flex flex-col gap-3 pointer-events-auto">
+            <div className="absolute top-3 left-3 z-25 flex flex-col gap-2 pointer-events-auto">
               {leftPanel}
             </div>
           )}
 
           {/* Right Wing Dock (Deflections, Boss HP, & Strike alerts) */}
           {rightPanel && (
-            <div className="absolute top-4 right-4 z-25 flex flex-col gap-3 text-right items-end pointer-events-auto">
+            <div className="absolute top-3 right-3 z-25 flex flex-col gap-2 text-right items-end pointer-events-auto">
               {rightPanel}
             </div>
           )}
@@ -155,12 +150,12 @@ export const FuturisticCockpitFrame: React.FC<FuturisticCockpitFrameProps> = ({
       </div>
 
       {/* ------------------------------------------------------------------- */}
-      {/* 3. BOTTOM FLIGHT INSTRUMENT PANEL: RADIAL DIALS & TENSION BARS      */}
+      {/* 3. COMPACT BOTTOM FLIGHT INSTRUMENT PANEL                           */}
       {/* ------------------------------------------------------------------- */}
-      <div className="relative z-30 w-full bg-slate-950/95 border-t border-cyan-500/40 px-4 py-2.5 flex flex-wrap items-center justify-between gap-4 backdrop-blur-md">
+      <div className="relative z-30 w-full bg-slate-950/95 border-t border-cyan-500/40 px-3 sm:px-4 py-1.5 sm:py-2 flex items-center justify-between gap-2 sm:gap-4 backdrop-blur-md min-h-[46px]">
         {/* DIAL 1: Joint Flexion & Angle Dial */}
-        <div className="flex items-center gap-3">
-          <div className="relative w-14 h-14 flex items-center justify-center">
+        <div className="flex items-center gap-2 sm:gap-2.5">
+          <div className="relative w-9 h-9 sm:w-11 sm:h-11 flex items-center justify-center shrink-0">
             <svg className="w-full h-full -rotate-90 transform" viewBox="0 0 80 80">
               {/* Outer gauge dial ring */}
               <circle
@@ -200,26 +195,26 @@ export const FuturisticCockpitFrame: React.FC<FuturisticCockpitFrameProps> = ({
             </svg>
             {/* Live Angle Number */}
             <div className="absolute flex flex-col items-center justify-center text-center">
-              <span className="text-xs font-black text-cyan-300 font-mono leading-none">
+              <span className="text-[10px] sm:text-xs font-black text-cyan-300 font-mono leading-none">
                 {Math.round(clampedAngle)}°
               </span>
             </div>
           </div>
           <div className="flex flex-col text-left">
-            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-              JOINT FLEXION
+            <span className="text-[8px] sm:text-[9px] text-slate-400 font-bold uppercase tracking-wider">
+              FLEXION
             </span>
-            <span className="text-xs font-black text-cyan-300 font-mono">
-              TARGET: {Math.round(targetAngle)}°
+            <span className="text-[10px] sm:text-xs font-black text-cyan-300 font-mono leading-tight">
+              TGT: {Math.round(targetAngle)}°
             </span>
           </div>
         </div>
 
         {/* GAUGE 2: Segmented LED Warp Tension / Hold Progress Bar */}
-        <div className="flex flex-col items-center flex-1 max-w-xs mx-auto">
-          <div className="w-full flex items-center justify-between text-[10px] font-bold mb-1">
-            <span className="text-slate-400 uppercase tracking-widest">
-              {repCycleStatus === "STAND_UP_TO_RECHARGE" ? "CAPACITOR RECHARGE" : "KINETIC TENSION"}
+        <div className="flex flex-col items-center flex-1 max-w-[150px] sm:max-w-[200px] md:max-w-xs mx-auto">
+          <div className="w-full flex items-center justify-between text-[8px] sm:text-[9px] font-bold mb-0.5">
+            <span className="text-slate-400 uppercase tracking-widest truncate">
+              {repCycleStatus === "STAND_UP_TO_RECHARGE" ? "RECHARGE" : "KINETIC TENSION"}
             </span>
             <span
               className={
@@ -237,13 +232,13 @@ export const FuturisticCockpitFrame: React.FC<FuturisticCockpitFrameProps> = ({
                 : `${Math.round(holdProgress * 100)}%`}
             </span>
           </div>
-          <div className="w-full flex gap-1 h-3 bg-slate-900 rounded p-0.5 border border-slate-800">
+          <div className="w-full flex gap-0.5 sm:gap-1 h-2 sm:h-2.5 bg-slate-900 rounded p-0.5 border border-slate-800">
             {[...Array(10)].map((_, i) => {
               const active = isShieldActive || holdProgress >= (i + 1) * 0.1;
               return (
                 <div
                   key={i}
-                  className={`flex-1 rounded-sm transition-all duration-100 ${
+                  className={`flex-1 rounded-xs transition-all duration-100 ${
                     active
                       ? i >= 8
                         ? "bg-cyan-400 shadow-[0_0_8px_rgba(0,240,255,0.9)]"
@@ -259,8 +254,8 @@ export const FuturisticCockpitFrame: React.FC<FuturisticCockpitFrameProps> = ({
         </div>
 
         {/* DIAL 3: Form Purity Tachometer */}
-        <div className="flex items-center gap-3">
-          <div className="relative w-14 h-14 flex items-center justify-center">
+        <div className="flex items-center gap-2 sm:gap-2.5">
+          <div className="relative w-9 h-9 sm:w-11 sm:h-11 flex items-center justify-center shrink-0">
             <svg className="w-full h-full -rotate-90 transform" viewBox="0 0 80 80">
               <circle
                 cx="40"
@@ -285,16 +280,16 @@ export const FuturisticCockpitFrame: React.FC<FuturisticCockpitFrameProps> = ({
               />
             </svg>
             <div className="absolute flex flex-col items-center justify-center text-center">
-              <span className="text-xs font-black text-emerald-400 font-mono leading-none">
+              <span className="text-[10px] sm:text-xs font-black text-emerald-400 font-mono leading-none">
                 {purityPct}%
               </span>
             </div>
           </div>
           <div className="flex flex-col text-left">
-            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-              FORM PURITY
+            <span className="text-[8px] sm:text-[9px] text-slate-400 font-bold uppercase tracking-wider">
+              PURITY
             </span>
-            <span className="text-xs font-black text-emerald-300 font-mono">
+            <span className="text-[10px] sm:text-xs font-black text-emerald-300 font-mono leading-tight">
               {purityPct >= 80 ? "OPTIMAL" : purityPct >= 60 ? "STABLE" : "FAULT"}
             </span>
           </div>

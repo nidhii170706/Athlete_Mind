@@ -42,6 +42,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(session.user);
     }
     setIsLoading(false);
+
+    const handleAuthChange = () => {
+      const s = authService.getCurrentSession();
+      setUser(s ? s.user : null);
+    };
+
+    window.addEventListener("athletemind_auth_change", handleAuthChange);
+    return () => window.removeEventListener("athletemind_auth_change", handleAuthChange);
   }, []);
 
   const signIn = async (email: string, password: string, expectedRole: UserRole) => {

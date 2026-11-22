@@ -79,6 +79,17 @@ export const DEMO_THERAPIST_MARCUS: UserProfile = {
   createdAt: "2026-11-10T08:00:00.000Z",
 };
 
+export const DEMO_PATIENT_UNLINKED: UserProfile = {
+  id: "patient_karan_sharma",
+  email: "patient.karan@athletemind.health",
+  fullName: "Karan Sharma",
+  role: "patient",
+  isVerified: true,
+  assignedTherapistId: undefined,
+  hasActivePlan: false,
+  createdAt: "2026-11-21T10:00:00.000Z",
+};
+
 const STORAGE_SESSION_KEY = "athletemind_auth_session";
 const STORAGE_USERS_KEY = "athletemind_registered_users";
 const STORAGE_RESET_KEY = "athletemind_pwd_resets";
@@ -110,6 +121,10 @@ function getStoredUsers(): Record<string, StoredUserRecord> {
   const initial: Record<string, StoredUserRecord> = {
     [DEMO_PATIENT.email.toLowerCase()]: {
       profile: DEMO_PATIENT,
+      passwordHash: hashPassword("athlete123"),
+    },
+    [DEMO_PATIENT_UNLINKED.email.toLowerCase()]: {
+      profile: DEMO_PATIENT_UNLINKED,
       passwordHash: hashPassword("athlete123"),
     },
     [DEMO_THERAPIST.email.toLowerCase()]: {
@@ -532,6 +547,50 @@ class AuthService {
     }
     return false;
   }
+
+  updateUserProfile(userId: string, updates: Partial<UserProfile>): UserProfile | null {
+    if (typeof window === "undefined") return null;
+    const users = getStoredUsers();
+    let targetEmail: string | null = null;
+    for (const [email, record] of Object.entries(users)) {
+      if (record.profile.id === userId) {
+        targetEmail = email;
+        break;
+      }
+    }
+    if (!targetEmail) {
+      for (const demo of [DEMO_PATIENT, DEMO_PATIENT_UNLINKED, DEMO_THERAPIST, DEMO_THERAPIST_MARCUS]) {
+        if (demo.id === userId) {
+          targetEmail = demo.email.toLowerCase();
+          users[targetEmail] = {
+            profile: { ...demo, ...updates },
+            passwordHash: hashPassword("athlete123"),
+          };
+          break;
+        }
+      }
+    }
+    if (targetEmail && users[targetEmail]) {
+      users[targetEmail].profile = {
+        ...users[targetEmail].profile,
+        ...updates,
+      };
+      saveStoredUsers(users);
+
+      const currentSession = this.getCurrentSession();
+      if (currentSession && currentSession.user.id === userId) {
+        currentSession.user = {
+          ...currentSession.user,
+          ...updates,
+        };
+        localStorage.setItem(STORAGE_SESSION_KEY, JSON.stringify(currentSession));
+      }
+
+      window.dispatchEvent(new CustomEvent("athletemind_auth_change"));
+      return users[targetEmail].profile;
+    }
+    return null;
+  }
 }
 
 export const authService = new AuthService();
@@ -542,5 +601,9 @@ export function canEditCarePlan(user: UserProfile | null, patientId?: string): b
 
 export function canViewSessionReport(user: UserProfile | null, patientId?: string): boolean {
   return authService.canViewSessionReport(user, patientId);
+}
+
+export function updateUserProfile(userId: string, updates: Partial<UserProfile>): UserProfile | null {
+  return authService.updateUserProfile(userId, updates);
 }
 
